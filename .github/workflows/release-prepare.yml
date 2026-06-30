@@ -3,9 +3,6 @@ name: Release (prepare)
 on:
   workflow_dispatch:
     inputs:
-      release_as:
-        required: false
-        default: ""
       packages:
         description: "Which package(s) to include in this release"
         type: choice
@@ -51,6 +48,5 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          RELEASE_AS: ${{ inputs.release_as }}
           RELEASE_PACKAGES: ${{ inputs.packages }}
         run: node scripts/prepare-release.mjs

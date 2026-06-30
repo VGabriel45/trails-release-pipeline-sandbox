@@ -64,8 +64,8 @@ Works out of the box for any number of packages under `packages/*`. Each
 package versions independently; the prepare step caps pre-1.0 bumps per package,
 writes per-package changelogs, and lists every changed package in the release PR
 title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
-`fixed`, `ignore`, `updateInternalDependencies`). For per-package version
-overrides, pass `name@version` pairs to the `release_as` input.
+`fixed`, `ignore`, `updateInternalDependencies`). To force a specific version,
+edit `package.json` on `master` before running prepare.
 
 **Selective release:** **Release (prepare)** and canary publish expose a
 **packages** dropdown (default: **All modified packages**). Choosing one package

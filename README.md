@@ -53,19 +53,9 @@ While a package's version is `0.x`, prepare-release caps bumps:
 | `[minor]` | 2nd digit | `0.2.0 → 0.3.0` |
 | `[major]` | 2nd digit (**capped**, no `1.0.0`) | `0.2.0 → 0.3.0` |
 
-The cap lifts automatically once a package reaches `1.x`.
-
-### Maintainer override (`release_as`)
-
-To force an explicit version (e.g. to finally cut `1.0.0`), run **Release
-(prepare)** with the `release_as` input:
-
-```
-gh workflow run release-prepare.yml --ref master -f release_as=1.0.0
-```
-
-`release_as` skips the pre-1.0 cap. A single semver applies to **all** packages
-(handy for a single-package repo).
+The cap lifts automatically once a package reaches `1.x`. To force a specific
+version (e.g. cutting `1.0.0`), set it in `package.json` on `master` before
+running **Release (prepare)**.
 
 ## Monorepo
 
@@ -79,13 +69,6 @@ Each package versions **independently** — a release can bump `demo-sdk` to
   `Release: demo-sdk@1.1.0, demo-utils@0.2.0`.
 
 Publish then creates one git tag + one GitHub Release **per package**.
-
-For per-package overrides, pass `name@version` pairs to `release_as`:
-
-```
-gh workflow run release-prepare.yml --ref master \
-  -f release_as="@vgabriel45/demo-sdk@1.0.0 @vgabriel45/demo-utils@0.3.0"
-```
 
 ### Selective release (`packages`)
 
