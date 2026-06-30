@@ -14,3 +14,8 @@ export function farewell(name = "world") {
 export function celebrate(event = "release") {
   return `🎉 ${event} shipped!`;
 }
+
+/** Greet with a leading emoji (defaults to wave). */
+export function greetEmoji(name = "world", emoji = "👋", options = {}) {
+  return `${emoji} ${greet(name, options)}`;
+}
