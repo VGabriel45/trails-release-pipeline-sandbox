@@ -1,4 +1,7 @@
 import { execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -8,13 +11,31 @@ function execOut(cmd, env = process.env) {
   return execSync(cmd, { encoding: "utf8", env: { ...process.env, ...env } }).trim();
 }
 
-function ensureNpmAuth() {
-  // A non-empty NPM_TOKEN takes precedence (token-based publish).
-  if (process.env.NPM_TOKEN) {
-    process.env.NODE_AUTH_TOKEN = process.env.NPM_TOKEN;
-  }
+function npmrcPath() {
+  return process.env.NPM_CONFIG_USERCONFIG || join(homedir(), ".npmrc");
+}
 
-  if (process.env.NODE_AUTH_TOKEN) {
+// setup-node writes `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` and a
+// placeholder NODE_AUTH_TOKEN. For OIDC that empty/placeholder token shadows the
+// trusted-publisher flow, so we strip the auth line and unset the placeholder.
+function clearNpmrcAuth() {
+  delete process.env.NODE_AUTH_TOKEN;
+  const path = npmrcPath();
+  if (!existsSync(path)) return;
+  const cleaned = readFileSync(path, "utf8")
+    .split("\n")
+    .filter((line) => !line.includes("_authToken"))
+    .join("\n");
+  writeFileSync(path, cleaned);
+}
+
+function ensureNpmAuth() {
+  // Decide on the real NPM_TOKEN secret only — NODE_AUTH_TOKEN is always set to a
+  // placeholder by setup-node and must not be treated as a real credential.
+  const token = process.env.NPM_TOKEN;
+
+  if (token) {
+    process.env.NODE_AUTH_TOKEN = token;
     try {
       const whoami = execOut("npm whoami --registry=https://registry.npmjs.org");
       console.log(`npm authenticated via token as: ${whoami}`);
@@ -25,10 +46,10 @@ function ensureNpmAuth() {
     return;
   }
 
-  // No token: fall back to OIDC trusted publishing.
-  // Requires id-token: write permission + a trusted publisher configured on npm.
+  // No token: use OIDC trusted publishing (needs id-token: write + npm >= 11.5.1).
   if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
-    console.log("No NPM_TOKEN — using npm OIDC trusted publishing.");
+    clearNpmrcAuth();
+    console.log("No NPM_TOKEN — publishing via npm OIDC trusted publishing.");
     return;
   }
 
