@@ -29,3 +29,12 @@ export function formatName(name = "") {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
+
+/** Initials from a display name, e.g. "jane doe" -> "JD". */
+export function formatInitials(name = "") {
+  return formatName(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0))
+    .join("");
+}
