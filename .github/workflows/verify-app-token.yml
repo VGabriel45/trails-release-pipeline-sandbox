@@ -1,0 +1,24 @@
+name: Verify App Token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.TRAILS_SDK_RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY }}
+          owner: VGabriel45
+          repositories: trails-release-pipeline-sandbox
+
+      - name: Confirm token works
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh api user -q .login

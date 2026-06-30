@@ -1,0 +1,8 @@
+{
+  "name": "demo-sdk",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Minimal publishable package for release pipeline sandbox testing",
+  "main": "index.js",
+  "files": ["index.js"]
+}
