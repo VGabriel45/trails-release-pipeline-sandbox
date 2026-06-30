@@ -3,6 +3,7 @@ name: Release (publish)
 on:
   push:
     branches: [production]
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -27,11 +28,13 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
+        # When NPM_TOKEN is unset, setup-node uses npm OIDC (requires trusted publisher on npm).
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Publish to npm (OIDC when configured)
+      - name: Publish to npm
         env:
           GH_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Optional fallback — do NOT set NODE_AUTH_TOKEN here; an empty value disables OIDC.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs

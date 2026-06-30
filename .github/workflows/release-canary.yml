@@ -44,5 +44,11 @@ jobs:
 
       - if: steps.pending.outputs.has == 'true'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm exec changeset publish --no-git-tag --tag canary
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then export NODE_AUTH_TOKEN="$NPM_TOKEN"; fi
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "npm auth missing — set NPM_TOKEN or configure OIDC trusted publishing"
+            exit 1
+          fi
+          pnpm exec changeset publish --no-git-tag --tag canary

@@ -7,7 +7,7 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 - **`trails-sdk-release-bot`** GitHub App (App ID `4181013`) — commits AI changesets and runs prepare-release
 - **Changesets** with `@changesets/changelog-github`
 - **Workflows:** AI changeset generation, changeset check, prepare, publish, canary
-- **`demo-sdk`** — minimal publishable package for end-to-end testing
+- **`@vgabriel45/demo-sdk`** — minimal publishable package for end-to-end testing
 
 ## Secrets (repo)
 
@@ -16,7 +16,17 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 | `TRAILS_SDK_RELEASE_BOT_APP_ID` | GitHub App ID |
 | `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY` | App private key (PEM) |
 | `ANTHROPIC_API_KEY` | LLM prose for changesets (optional — falls back to PR title) |
-| `NPM_TOKEN` | Optional for sandbox npm publish (OIDC later on real repo) |
+| `NPM_TOKEN` | npm publish — **required for sandbox** unless OIDC trusted publishing is configured (see below) |
+
+### npm publish auth (sandbox)
+
+`@vgabriel45/demo-sdk` does not exist on npm yet — the **first publish creates it**. Use an automation token for that:
+
+1. [npmjs.com](https://www.npmjs.com) → Access Tokens → **Automation** token (publish scope for your account)
+2. Repo → Settings → Secrets → Actions → add **`NPM_TOKEN`**
+3. Push these changes to `production`, then run **Release (publish)** (or re-run the workflow)
+
+After the package exists, you can optionally switch to **OIDC trusted publishing** (npm → package → Trusted Publisher → `VGabriel45/trails-release-pipeline-sandbox` / `release-publish.yml`) and remove `NPM_TOKEN`.
 
 ## Quick test
 

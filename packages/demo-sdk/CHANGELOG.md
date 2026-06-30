@@ -1,4 +1,4 @@
-# demo-sdk
+# @vgabriel45/demo-sdk
 
 ## 0.1.1
 
