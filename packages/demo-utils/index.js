@@ -1,10 +1,11 @@
 /** Sandbox utils — second package used to test monorepo releases. */
 export function slugify(text = "") {
-  return text
+  const slug = String(text ?? "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+  return slug || "untitled";
 }
 
 export function clamp(value, min, max) {
