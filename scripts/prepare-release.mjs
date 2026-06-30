@@ -1,7 +1,6 @@
 import { execSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { normalizePackageChangelogs } from "./lib/normalize-changelog.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -103,12 +102,14 @@ if (!ghToken) {
   throw new Error("GH_TOKEN (app token) is required to open the release PR");
 }
 
+// @changesets/changelog-github resolves PR links/authors via the GitHub API.
+process.env.GITHUB_TOKEN ??= ghToken;
+
 let version;
 
 if (hasPendingChangesets()) {
   console.log("Pending changesets found — running changeset version…");
   runChangesetVersionWithRetry();
-  normalizePackageChangelogs();
   version = readReleaseVersion();
   console.log(`Release version: ${version}`);
 
