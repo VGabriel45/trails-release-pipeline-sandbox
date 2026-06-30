@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 1.0.0
+
+### Major Changes
+
+- [#6](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/6) [`0c42175`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/0c42175fbddd37bde31bd6242997c4b2521b97f1) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Replace greet uppercase flag with style option
+
 ## 0.2.0
 
 ### Minor Changes
