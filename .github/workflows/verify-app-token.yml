@@ -21,4 +21,4 @@ jobs:
       - name: Confirm token works
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: gh api user -q .login
+        run: gh api "repos/${{ github.repository }}" -q .full_name
