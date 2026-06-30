@@ -1,20 +1,16 @@
 import { execSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { normalizePackageChangelogs } from "./lib/normalize-changelog.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 }
 
 function runChangesetVersionWithRetry(maxAttempts = 3) {
-  const githubToken = process.env.GITHUB_TOKEN;
-  if (!githubToken) {
-    throw new Error("GITHUB_TOKEN is required for @changesets/changelog-github");
-  }
-
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      run("pnpm exec changeset version", { GITHUB_TOKEN: githubToken });
+      run("pnpm exec changeset version");
       return;
     } catch (err) {
       if (attempt === maxAttempts) throw err;
@@ -65,8 +61,9 @@ if (!pending) {
   process.exit(1);
 }
 
-console.log("Running changeset version (GITHUB_TOKEN → changelog-github GraphQL)…");
+console.log("Running changeset version…");
 runChangesetVersionWithRetry();
+normalizePackageChangelogs();
 
 const version = readReleaseVersion();
 console.log(`Release version: ${version}`);

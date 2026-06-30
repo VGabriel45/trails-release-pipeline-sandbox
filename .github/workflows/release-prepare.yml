@@ -36,9 +36,6 @@ jobs:
 
       - name: Prepare release
         env:
-          # App token: git push + open release PR
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
-          # Default Actions token: changelog-github GraphQL (read PR metadata)
-          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/prepare-release.mjs
