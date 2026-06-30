@@ -4,7 +4,7 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { packagesFromChangedFiles, repoRoot } from "./lib/packages.mjs";
 import { parseBumpToken, stripBumpTokens } from "./lib/bump-token.mjs";
-import { buildFallbackSummary } from "./lib/fallback-summary.mjs";
+import { buildFallbackSummary, stripConventionalPrefix } from "./lib/fallback-summary.mjs";
 
 const ROOT = repoRoot();
 const BASE = process.env.BASE_BRANCH ?? "master";
@@ -77,11 +77,36 @@ const commits = execSync(`git log origin/${BASE}..HEAD --format=%s`, {
   encoding: "utf8",
 }).trim();
 
+/** Commit subjects that touched files under packages/ (exclude bot changeset commits). */
+function packageCommitSubjects() {
+  const hashes = execSync(`git log origin/${BASE}..HEAD --format=%H`, {
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean);
+
+  return hashes
+    .map((hash) => {
+      const files = execSync(`git diff-tree --no-commit-id --name-only -r ${hash}`, {
+        encoding: "utf8",
+      })
+        .split("\n")
+        .filter(Boolean);
+      if (!files.some((f) => f.startsWith("packages/"))) return null;
+      const subject = execSync(`git log -1 --format=%s ${hash}`, {
+        encoding: "utf8",
+      }).trim();
+      if (/^chore\(changeset\):/i.test(subject)) return null;
+      return stripConventionalPrefix(subject);
+    })
+    .filter(Boolean);
+}
+
 const cleanTitle = stripBumpTokens(PR_TITLE);
 const cleanBody = stripBumpTokens(PR_BODY);
 
 const fallbackSummary = buildFallbackSummary({
-  commits,
+  commitSubjects: packageCommitSubjects(),
   changedFiles,
   cleanTitle,
   cleanBody,
