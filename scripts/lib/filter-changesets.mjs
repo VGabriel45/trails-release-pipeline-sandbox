@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 
 const CHANGESET_DIR = ".changeset";
-const HELD_DIR = join(CHANGESET_DIR, ".held");
+const HELD_DIR = ".release-held";
 const PKG_LINE = /^("[^"]+"|[^\s:#]+):\s*(patch|minor|major)\s*$/i;
 
 /** @returns {null | Set<string>} null = include all packages in pending changesets */
@@ -84,7 +84,7 @@ export function restoreHeldChangesets() {
 
 /**
  * Limit pending changesets to selected package(s). When selection is null/“all”,
- * leaves files unchanged. Unselected files are moved to `.changeset/.held/` so
+ * leaves files unchanged. Unselected files are moved to `.release-held/` so
  * they survive `changeset version` — call restoreHeldChangesets() after version
  * when committing to master (not needed for ephemeral canary runs).
  */

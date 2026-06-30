@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  production:
     if: github.event_name == 'push' || inputs.canary != true
     runs-on: ubuntu-latest
     steps:
