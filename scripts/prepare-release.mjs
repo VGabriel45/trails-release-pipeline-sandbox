@@ -6,6 +6,8 @@ import {
   restoreHeldChangesets,
 } from "./lib/filter-changesets.mjs";
 
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 }
