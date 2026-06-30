@@ -21,8 +21,7 @@ jobs:
         with:
           app-id: ${{ secrets.TRAILS_SDK_RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY }}
-          owner: VGabriel45
-          repositories: trails-release-pipeline-sandbox
+          # owner/repositories omitted → token is scoped to the current repo.
 
       - uses: actions/checkout@v4
         with:
@@ -43,5 +42,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           RELEASE_AS: ${{ inputs.release_as }}
         run: node scripts/prepare-release.mjs

@@ -145,10 +145,29 @@ function masterAheadOfProduction() {
   return Number(count) > 0;
 }
 
+// Configure the committer as the release bot. Portable: derives the identity
+// from the app slug (APP_SLUG, set by the workflow from create-github-app-token)
+// and falls back to github-actions[bot] when not running as an app.
 function configureGitBot() {
-  run('git config user.name "trails-sdk-release-bot[bot]"');
+  const slug = (process.env.APP_SLUG ?? "").trim();
+  if (slug) {
+    let userId = "";
+    try {
+      userId = execOut(`gh api "/users/${slug}[bot]" --jq .id`);
+    } catch {
+      // fall through to github-actions[bot]
+    }
+    if (userId) {
+      run(`git config user.name "${slug}[bot]"`);
+      run(
+        `git config user.email "${userId}+${slug}[bot]@users.noreply.github.com"`,
+      );
+      return;
+    }
+  }
+  run('git config user.name "github-actions[bot]"');
   run(
-    'git config user.email "4181013+trails-sdk-release-bot[bot]@users.noreply.github.com"',
+    'git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
   );
 }
 

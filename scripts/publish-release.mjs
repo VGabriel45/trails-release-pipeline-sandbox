@@ -59,14 +59,15 @@ function ensureNpmAuth() {
     return;
   }
 
+  const repo = process.env.GITHUB_REPOSITORY ?? "<owner>/<repo>";
   console.error(`
 npm authentication is not configured.
 
 Set ONE of:
-  1. NPM_TOKEN repo secret — npm token with WRITE access to @vgabriel45 (Automation token recommended)
-  2. npm OIDC trusted publishing — @vgabriel45/demo-sdk → Settings → Trusted Publisher:
-       owner: VGabriel45
-       repo:  trails-release-pipeline-sandbox
+  1. NPM_TOKEN repo secret — npm token with WRITE access to the package scope
+     (Automation token recommended).
+  2. npm OIDC trusted publishing — on each package's npm Settings → Trusted Publisher:
+       repo:     ${repo}
        workflow: release-publish.yml
      (needs "id-token: write" in the workflow and no NPM_TOKEN set)
 `);
@@ -117,10 +118,30 @@ function changelogSection(pkgName, version) {
   return null;
 }
 
-run('git config user.name "trails-sdk-release-bot[bot]"');
-run(
-  'git config user.email "4181013+trails-sdk-release-bot[bot]@users.noreply.github.com"',
-);
+function configureGitBot() {
+  const slug = (process.env.APP_SLUG ?? "").trim();
+  if (slug) {
+    let userId = "";
+    try {
+      userId = execOut(`gh api "/users/${slug}[bot]" --jq .id`);
+    } catch {
+      // fall through to github-actions[bot]
+    }
+    if (userId) {
+      run(`git config user.name "${slug}[bot]"`);
+      run(
+        `git config user.email "${userId}+${slug}[bot]@users.noreply.github.com"`,
+      );
+      return;
+    }
+  }
+  run('git config user.name "github-actions[bot]"');
+  run(
+    'git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
+  );
+}
+
+configureGitBot();
 
 ensureNpmAuth();
 run("pnpm exec changeset publish");

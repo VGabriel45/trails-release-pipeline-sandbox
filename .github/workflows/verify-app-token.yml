@@ -15,8 +15,7 @@ jobs:
         with:
           app-id: ${{ secrets.TRAILS_SDK_RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY }}
-          owner: VGabriel45
-          repositories: trails-release-pipeline-sandbox
+          # owner/repositories omitted → token is scoped to the current repo.
 
       - name: Confirm token works
         env:

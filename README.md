@@ -5,9 +5,13 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 ## What's here
 
 - **`trails-sdk-release-bot`** GitHub App (App ID `4181013`) — commits AI changesets and runs prepare-release
-- **Changesets** with `@changesets/changelog-github`
+- **Changesets** with a portable `@changesets/changelog-github` wrapper (`.changeset/changelog.cjs`)
 - **Workflows:** AI changeset generation, changeset check, prepare, publish, canary
 - **`@vgabriel45/demo-sdk`** — minimal publishable package for end-to-end testing
+
+> **Reusing this on another repo?** The workflows/scripts are drop-in (no
+> hardcoded owner/repo/bot values). See [`SETUP.md`](./SETUP.md) and
+> `scripts/setup-repo.sh`.
 
 ## Secrets (repo)
 
