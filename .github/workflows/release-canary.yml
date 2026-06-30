@@ -40,6 +40,8 @@ jobs:
           fi
 
       - if: steps.pending.outputs.has == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec changeset version --snapshot canary
 
       - if: steps.pending.outputs.has == 'true'
