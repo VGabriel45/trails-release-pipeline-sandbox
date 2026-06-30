@@ -1,6 +1,10 @@
 import { execSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  filterChangesetsByPackage,
+  restoreHeldChangesets,
+} from "./lib/filter-changesets.mjs";
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -71,30 +75,6 @@ function commitMessage(released) {
     .join(", ")}`;
 }
 
-// Parse the release_as override input. Accepts either a single semver
-// (applied to every publishable package — convenient for single-package repos)
-// or a list of "name@x.y.z" pairs for per-package overrides in a monorepo.
-function parseReleaseAs(input) {
-  const trimmed = (input ?? "").trim();
-  if (!trimmed) return null;
-  if (SEMVER_RE.test(trimmed)) return { all: trimmed };
-
-  const byName = new Map();
-  for (const part of trimmed.split(/[,\s]+/).filter(Boolean)) {
-    const at = part.lastIndexOf("@");
-    if (at <= 0) {
-      throw new Error(`Invalid release_as entry: "${part}" (expected name@x.y.z)`);
-    }
-    const name = part.slice(0, at);
-    const ver = part.slice(at + 1);
-    if (!SEMVER_RE.test(ver)) {
-      throw new Error(`Invalid version in release_as entry: "${part}"`);
-    }
-    byName.set(name, ver);
-  }
-  return { byName };
-}
-
 function publishablePackages() {
   const out = [];
   for (const entry of readdirSync("packages")) {
@@ -115,7 +95,8 @@ function publishablePackages() {
 // a `major` bump would jump to 1.0.0, which we don't want during early dev.
 // Rewrite `major` -> `minor` in pending changesets for any 0.x package so the
 // second digit moves instead (e.g. 0.2.0 -> 0.3.0). Lifted automatically once a
-// package reaches 1.x, or overridden explicitly via release_as.
+// package reaches 1.x. To ship a specific version (e.g. 1.0.0), set it in
+// package.json on master before running prepare.
 function capPre1MajorBumps() {
   const majorByName = new Map(
     publishablePackages().map((p) => [
@@ -145,40 +126,8 @@ function capPre1MajorBumps() {
 
   if (capped) {
     console.log(
-      "Pre-1.0: capped 'major' bumps to 'minor' (no automatic 1.0.0). Use release_as to override.",
+      "Pre-1.0: capped 'major' bumps to 'minor' (no automatic 1.0.0).",
     );
-  }
-}
-
-// Apply the release_as override after `changeset version` has run. For each
-// package that has an override, rewrite package.json to the target version and
-// relabel the changelog header that changeset just wrote (auto -> target).
-// `autoVersions` maps package name -> the version changeset produced.
-function forceVersion(spec, autoVersions) {
-  for (const p of publishablePackages()) {
-    const target = spec.all ?? spec.byName?.get(p.name);
-    if (!target) continue; // no override for this package — keep changeset's version
-
-    const pkgPath = join(p.dir, "package.json");
-    const pkgRaw = readFileSync(pkgPath, "utf8");
-    writeFileSync(
-      pkgPath,
-      pkgRaw.replace(/("version":\s*)"[^"]+"/, `$1"${target}"`),
-    );
-
-    const autoVersion = autoVersions.get(p.name);
-    if (autoVersion && autoVersion !== target) {
-      const changelogPath = join(p.dir, "CHANGELOG.md");
-      try {
-        const md = readFileSync(changelogPath, "utf8");
-        writeFileSync(
-          changelogPath,
-          md.replace(`## ${autoVersion}`, `## ${target}`),
-        );
-      } catch {
-        // no CHANGELOG for this package
-      }
-    }
   }
 }
 
@@ -254,23 +203,23 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
-const releaseAs = parseReleaseAs(process.env.RELEASE_AS);
+try {
+  filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
 
 let released;
 
 if (hasPendingChangesets()) {
-  // Explicit override wins; otherwise apply the pre-1.0 cap.
-  if (!releaseAs) capPre1MajorBumps();
+  capPre1MajorBumps();
 
   console.log("Pending changesets found — running changeset version…");
-  runChangesetVersionWithRetry();
-
-  if (releaseAs) {
-    const autoVersions = new Map(
-      publishablePackages().map((p) => [p.name, p.version]),
-    );
-    forceVersion(releaseAs, autoVersions);
-    console.log("release_as override applied.");
+  try {
+    runChangesetVersionWithRetry();
+  } finally {
+    restoreHeldChangesets();
   }
 
   released = releasedPackages();

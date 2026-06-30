@@ -38,7 +38,7 @@ After the package exists, you can optionally switch to **OIDC trusted publishing
 1. **Verify app token:** Actions → **Verify App Token** → Run workflow
 2. **Open a PR** to `master` with `[patch]` in the title, change `packages/demo-sdk/index.js`
 3. CI generates `.changeset/pr-<n>.md` and commits it back
-4. **Prepare release:** Actions → **Release (prepare)** → opens `master → production` PR
+4. **Prepare release:** Actions → **Release (prepare)** → pick package (default: **All modified packages**) → opens `master → production` PR
 5. Merge to `production` → **Release (publish)** runs
 
 ## Versioning (pre-1.0)
@@ -53,19 +53,9 @@ While a package's version is `0.x`, prepare-release caps bumps:
 | `[minor]` | 2nd digit | `0.2.0 → 0.3.0` |
 | `[major]` | 2nd digit (**capped**, no `1.0.0`) | `0.2.0 → 0.3.0` |
 
-The cap lifts automatically once a package reaches `1.x`.
-
-### Maintainer override (`release_as`)
-
-To force an explicit version (e.g. to finally cut `1.0.0`), run **Release
-(prepare)** with the `release_as` input:
-
-```
-gh workflow run release-prepare.yml --ref master -f release_as=1.0.0
-```
-
-`release_as` skips the pre-1.0 cap. A single semver applies to **all** packages
-(handy for a single-package repo).
+The cap lifts automatically once a package reaches `1.x`. To force a specific
+version (e.g. cutting `1.0.0`), set it in `package.json` on `master` before
+running **Release (prepare)**.
 
 ## Monorepo
 
@@ -80,12 +70,21 @@ Each package versions **independently** — a release can bump `demo-sdk` to
 
 Publish then creates one git tag + one GitHub Release **per package**.
 
-For per-package overrides, pass `name@version` pairs to `release_as`:
+### Selective release (`packages`)
+
+When several packages have pending changesets, **Release (prepare)** and canary
+publish expose a **packages** dropdown (default: **All modified packages**).
+Choosing a single package filters changesets before `changeset version`; held
+changesets for other packages are restored on `master` so they can ship in a
+later release.
 
 ```
 gh workflow run release-prepare.yml --ref master \
-  -f release_as="@vgabriel45/demo-sdk@1.0.0 @vgabriel45/demo-utils@0.3.0"
+  -f packages="@vgabriel45/demo-sdk"
 ```
+
+GitHub Actions `choice` options are static — add new packages to
+`release-prepare.yml` and `release-publish.yml` when the monorepo grows.
 
 Tune lockstep/independence and exclusions in `.changeset/config.json`
 (`linked`, `fixed`, `ignore`, `updateInternalDependencies`).

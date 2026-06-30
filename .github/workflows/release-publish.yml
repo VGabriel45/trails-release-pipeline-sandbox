@@ -4,17 +4,32 @@ on:
   push:
     branches: [production]
   workflow_dispatch:
+    inputs:
+      canary:
+        description: "Release canary"
+        type: boolean
+        default: false
+      packages:
+        description: "Which package(s) to include in this release"
+        type: choice
+        default: All modified packages
+        options:
+          - All modified packages
+          # Add new publishable packages here when the monorepo grows.
+          - "@vgabriel45/demo-sdk"
+          - "@vgabriel45/demo-utils"
 
 permissions:
   id-token: write
   contents: write
 
 concurrency:
-  group: release-publish
+  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.canary && 'canary' || 'production' }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  production:
+    if: github.event_name == 'push' || inputs.canary != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +43,39 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-        # When NPM_TOKEN is unset, setup-node uses npm OIDC (requires trusted publisher on npm).
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Publish to npm
+      - name: Publish release to npm
         env:
           GH_TOKEN: ${{ github.token }}
-          # Optional fallback — do NOT set NODE_AUTH_TOKEN here; an empty value disables OIDC.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs
+
+  canary:
+    if: github.event_name == 'workflow_dispatch' && inputs.canary == true
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Publish canary snapshot to npm
+        env:
+          RELEASE_PACKAGES: ${{ inputs.packages }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/run-canary.mjs

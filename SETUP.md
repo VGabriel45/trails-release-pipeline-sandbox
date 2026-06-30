@@ -16,12 +16,13 @@ Copy these into the target repo (paths unchanged):
 .github/workflows/changeset-check.yml
 .github/workflows/release-prepare.yml
 .github/workflows/release-publish.yml
-.github/workflows/release-canary.yml
 .github/workflows/verify-app-token.yml
 scripts/ai-changeset.mjs
 scripts/changeset-check.mjs
 scripts/prepare-release.mjs
 scripts/publish-release.mjs
+scripts/run-canary.mjs
+scripts/filter-changesets.mjs
 scripts/lib/*.mjs
 scripts/setup-repo.sh
 ```
@@ -32,7 +33,7 @@ Then merge into the target `package.json`:
 {
   "scripts": {
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
-    "publish-canary": "gh workflow run release-canary.yml --ref master"
+    "publish-canary": "gh workflow run release-publish.yml --ref master -f canary=true"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.105.0",          // omit if using GitHub Models
@@ -54,8 +55,8 @@ This pipeline assumes two branches:
 GitHub Actions trigger filters can't read env vars, so these names are fixed in
 the workflow `on:`/`ref:` fields. If your repo uses different names (e.g.
 `main`), rename them in: `ai-changeset.yml` (`branches:`), `release-prepare.yml`
-(`ref:` + the script's branch refs), `release-publish.yml` (`branches:`), and
-`release-canary.yml` (`ref:`).
+(`ref:` + the script's branch refs), and `release-publish.yml` (`branches:` +
+canary job `ref: master`).
 
 ## Monorepo
 
@@ -63,8 +64,14 @@ Works out of the box for any number of packages under `packages/*`. Each
 package versions independently; the prepare step caps pre-1.0 bumps per package,
 writes per-package changelogs, and lists every changed package in the release PR
 title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
-`fixed`, `ignore`, `updateInternalDependencies`). For per-package version
-overrides, pass `name@version` pairs to the `release_as` input.
+`fixed`, `ignore`, `updateInternalDependencies`). To force a specific version,
+edit `package.json` on `master` before running prepare.
+
+**Selective release:** **Release (prepare)** and canary publish expose a
+**packages** dropdown (default: **All modified packages**). Choosing one package
+filters changesets before versioning; unselected changesets are held and restored
+on `master` after `changeset version`. Add new npm names to the `packages` choice
+list in `release-prepare.yml` and `release-publish.yml` when the monorepo grows.
 
 ## One-time per org: the GitHub App
 

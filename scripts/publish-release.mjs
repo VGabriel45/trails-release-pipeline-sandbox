@@ -6,8 +6,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ensureNpmAuth } from "./lib/npm-auth.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -15,63 +16,6 @@ function run(cmd, env = process.env) {
 
 function execOut(cmd, env = process.env) {
   return execSync(cmd, { encoding: "utf8", env: { ...process.env, ...env } }).trim();
-}
-
-function npmrcPath() {
-  return process.env.NPM_CONFIG_USERCONFIG || join(homedir(), ".npmrc");
-}
-
-// setup-node writes `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` and a
-// placeholder NODE_AUTH_TOKEN. For OIDC that empty/placeholder token shadows the
-// trusted-publisher flow, so we strip the auth line and unset the placeholder.
-function clearNpmrcAuth() {
-  delete process.env.NODE_AUTH_TOKEN;
-  const path = npmrcPath();
-  if (!existsSync(path)) return;
-  const cleaned = readFileSync(path, "utf8")
-    .split("\n")
-    .filter((line) => !line.includes("_authToken"))
-    .join("\n");
-  writeFileSync(path, cleaned);
-}
-
-function ensureNpmAuth() {
-  // Decide on the real NPM_TOKEN secret only — NODE_AUTH_TOKEN is always set to a
-  // placeholder by setup-node and must not be treated as a real credential.
-  const token = process.env.NPM_TOKEN;
-
-  if (token) {
-    process.env.NODE_AUTH_TOKEN = token;
-    try {
-      const whoami = execOut("npm whoami --registry=https://registry.npmjs.org");
-      console.log(`npm authenticated via token as: ${whoami}`);
-    } catch {
-      console.error("npm whoami failed — NPM_TOKEN is present but not valid.");
-      process.exit(1);
-    }
-    return;
-  }
-
-  // No token: use OIDC trusted publishing (needs id-token: write + npm >= 11.5.1).
-  if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
-    clearNpmrcAuth();
-    console.log("No NPM_TOKEN — publishing via npm OIDC trusted publishing.");
-    return;
-  }
-
-  const repo = process.env.GITHUB_REPOSITORY ?? "<owner>/<repo>";
-  console.error(`
-npm authentication is not configured.
-
-Set ONE of:
-  1. NPM_TOKEN repo secret — npm token with WRITE access to the package scope
-     (Automation token recommended).
-  2. npm OIDC trusted publishing — on each package's npm Settings → Trusted Publisher:
-       repo:     ${repo}
-       workflow: release-publish.yml
-     (needs "id-token: write" in the workflow and no NPM_TOKEN set)
-`);
-  process.exit(1);
 }
 
 function publishablePackages() {
