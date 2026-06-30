@@ -4,17 +4,23 @@ on:
   push:
     branches: [production]
   workflow_dispatch:
+    inputs:
+      canary:
+        description: "Publish pending changesets from master to npm @canary (snapshot test build)"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
   contents: write
 
 concurrency:
-  group: release-publish
+  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.canary && 'canary' || 'production' }}
   cancel-in-progress: false
 
 jobs:
   publish:
+    if: github.event_name == 'push' || inputs.canary != true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +34,52 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
-        # When NPM_TOKEN is unset, setup-node uses npm OIDC (requires trusted publisher on npm).
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Publish to npm
+      - name: Publish release to npm
         env:
           GH_TOKEN: ${{ github.token }}
-          # Optional fallback — do NOT set NODE_AUTH_TOKEN here; an empty value disables OIDC.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs
+
+  canary:
+    if: github.event_name == 'workflow_dispatch' && inputs.canary == true
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Skip if no pending changesets
+        id: pending
+        run: |
+          if ls .changeset/*.md >/dev/null 2>&1; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No pending changesets on master."
+          fi
+
+      - if: steps.pending.outputs.has == 'true'
+        env:
+          CHANGESET_SNAPSHOT: "1"
+        run: pnpm exec changeset version --snapshot canary
+
+      - if: steps.pending.outputs.has == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-canary.mjs

@@ -2,8 +2,7 @@
 // the repo from the GITHUB_REPOSITORY env var (always "owner/repo" in GitHub
 // Actions) instead of a hardcoded value, so this file is drop-in for any repo.
 //
-// Set CHANGESET_SNAPSHOT=1 (canary workflow) to skip changelog output entirely —
-// snapshot builds only need a version bump + npm publish under the @canary tag.
+// Set CHANGESET_SNAPSHOT=1 (canary job in release-publish.yml) to skip changelog
 const github = require("@changesets/changelog-github").default;
 
 const isSnapshot = process.env.CHANGESET_SNAPSHOT === "1";

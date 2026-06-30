@@ -16,12 +16,12 @@ Copy these into the target repo (paths unchanged):
 .github/workflows/changeset-check.yml
 .github/workflows/release-prepare.yml
 .github/workflows/release-publish.yml
-.github/workflows/release-canary.yml
 .github/workflows/verify-app-token.yml
 scripts/ai-changeset.mjs
 scripts/changeset-check.mjs
 scripts/prepare-release.mjs
 scripts/publish-release.mjs
+scripts/publish-canary.mjs
 scripts/lib/*.mjs
 scripts/setup-repo.sh
 ```
@@ -32,7 +32,7 @@ Then merge into the target `package.json`:
 {
   "scripts": {
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
-    "publish-canary": "gh workflow run release-canary.yml --ref master"
+    "publish-canary": "gh workflow run release-publish.yml --ref master -f canary=true"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.105.0",          // omit if using GitHub Models
@@ -54,8 +54,8 @@ This pipeline assumes two branches:
 GitHub Actions trigger filters can't read env vars, so these names are fixed in
 the workflow `on:`/`ref:` fields. If your repo uses different names (e.g.
 `main`), rename them in: `ai-changeset.yml` (`branches:`), `release-prepare.yml`
-(`ref:` + the script's branch refs), `release-publish.yml` (`branches:`), and
-`release-canary.yml` (`ref:`).
+(`ref:` + the script's branch refs), and `release-publish.yml` (`branches:` +
+canary job `ref: master`).
 
 ## Monorepo
 
