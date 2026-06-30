@@ -19,3 +19,13 @@ export function celebrate(event = "release") {
 export function greetEmoji(name = "world", emoji = "👋", options = {}) {
   return `${emoji} ${greet(name, options)}`;
 }
+
+/** Title-case a display name for UI labels. */
+export function formatName(name = "") {
+  return String(name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
