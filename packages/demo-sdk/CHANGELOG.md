@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 1.2.0
+
+### Minor Changes
+
+- [#14](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/14) [`1b97768`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/1b977681aa49d6fe502f926d5c88cbbe7a920b3d) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Add formatInitials companion helper; add formatName helper for display labels
+
 ## 1.1.0
 
 ### Minor Changes
