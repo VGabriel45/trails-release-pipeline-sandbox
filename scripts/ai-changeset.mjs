@@ -57,13 +57,13 @@ if (affected.length === 0) {
 
 if (skip) {
   if (existsSync(changesetPath)) unlinkSync(changesetPath);
-  console.log("@skip-changeset — removed changeset if present.");
+  console.log("[skip-changeset] — removed changeset if present.");
   process.exit(0);
 }
 
 if (!bump) {
   console.error(
-    "Publishable packages changed but no @patch/@minor/@major token found.",
+    "Publishable packages changed but no [patch]/[minor]/[major] token found.",
   );
   process.exit(1);
 }

@@ -30,7 +30,7 @@ if (skip) {
 const changesetPath = join(ROOT, ".changeset", `pr-${PR_NUMBER}.md`);
 if (!bump) {
   console.error(
-    "FAIL: add @patch, @minor, or @major to the PR title or description.",
+    "FAIL: add [patch], [minor], or [major] to the PR title or description.",
   );
   process.exit(1);
 }

@@ -1,6 +1,12 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 function run(cmd, env = process.env) {
@@ -67,6 +73,50 @@ Set ONE of:
   process.exit(1);
 }
 
+// Split a git tag like "@scope/pkg@1.2.3" or "pkg@1.2.3" into name + version.
+function parseTag(tag) {
+  const at = tag.lastIndexOf("@");
+  if (at <= 0) return null;
+  return { name: tag.slice(0, at), version: tag.slice(at + 1) };
+}
+
+// Extract the "## <version>" section from the package's CHANGELOG.md so release
+// notes come from the changeset-generated changelog rather than raw PR titles
+// (which can contain bump tokens that GitHub auto-links as @mentions).
+function changelogSection(pkgName, version) {
+  const packagesDir = "packages";
+  for (const entry of readdirSync(packagesDir)) {
+    const dir = join(packagesDir, entry);
+    if (!statSync(dir).isDirectory()) continue;
+    let pkg;
+    try {
+      pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    if (pkg.name !== pkgName) continue;
+
+    let md;
+    try {
+      md = readFileSync(join(dir, "CHANGELOG.md"), "utf8");
+    } catch {
+      return null;
+    }
+    const lines = md.split("\n");
+    const start = lines.findIndex((l) => l.trim() === `## ${version}`);
+    if (start === -1) return null;
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) {
+      if (/^## /.test(lines[i])) {
+        end = i;
+        break;
+      }
+    }
+    return lines.slice(start + 1, end).join("\n").trim();
+  }
+  return null;
+}
+
 run('git config user.name "trails-sdk-release-bot[bot]"');
 run(
   'git config user.email "4181013+trails-sdk-release-bot[bot]@users.noreply.github.com"',
@@ -84,8 +134,26 @@ const tags = execSync("git tag --sort=-creatordate", { encoding: "utf8" })
 
 for (const tag of tags) {
   try {
-    execSync(`gh release view "${tag}"`, { stdio: "pipe", env: { ...process.env, GH_TOKEN: ghToken } });
+    execSync(`gh release view "${tag}"`, {
+      stdio: "pipe",
+      env: { ...process.env, GH_TOKEN: ghToken },
+    });
+    continue;
   } catch {
+    // release does not exist yet — create it
+  }
+
+  const parsed = parseTag(tag);
+  const notes = parsed ? changelogSection(parsed.name, parsed.version) : null;
+
+  if (notes) {
+    const notesFile = join(tmpdir(), `release-notes-${parsed.version}.md`);
+    writeFileSync(notesFile, `${notes}\n`);
+    run(
+      `gh release create "${tag}" --title "${tag}" --notes-file "${notesFile}"`,
+      { GH_TOKEN: ghToken },
+    );
+  } else {
     run(`gh release create "${tag}" --generate-notes`, { GH_TOKEN: ghToken });
   }
 }

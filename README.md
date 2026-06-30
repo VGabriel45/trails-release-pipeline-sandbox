@@ -31,7 +31,7 @@ After the package exists, you can optionally switch to **OIDC trusted publishing
 ## Quick test
 
 1. **Verify app token:** Actions → **Verify App Token** → Run workflow
-2. **Open a PR** to `master` with `@patch` in the title, change `packages/demo-sdk/index.js`
+2. **Open a PR** to `master` with `[patch]` in the title, change `packages/demo-sdk/index.js`
 3. CI generates `.changeset/pr-<n>.md` and commits it back
 4. **Prepare release:** Actions → **Release (prepare)** → opens `master → production` PR
 5. Merge to `production` → **Release (publish)** runs
