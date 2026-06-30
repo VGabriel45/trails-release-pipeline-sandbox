@@ -14,10 +14,8 @@ permissions:
 
 jobs:
   generate:
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'trails-sdk-release-bot[bot]' &&
-      !startsWith(github.event.pull_request.head.ref, 'changeset-bot/')
+    # Same-repo PRs only; loop prevention is handled in scripts/ai-changeset.mjs
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v1
@@ -43,6 +41,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Fetch base branch for diff
+        run: git fetch origin master
+
       - name: Generate changeset
         env:
           BASE_BRANCH: master
@@ -51,6 +52,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: claude-sonnet-4-6
         run: node scripts/ai-changeset.mjs
 
       - name: Commit changeset to PR branch

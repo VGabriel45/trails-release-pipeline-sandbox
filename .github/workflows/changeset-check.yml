@@ -21,6 +21,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: git fetch origin master
+
       - name: Verify bump token and changeset file
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
