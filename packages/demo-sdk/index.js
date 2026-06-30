@@ -7,3 +7,8 @@ export function greet(name = "world", { uppercase = false } = {}) {
 export function farewell(name = "world") {
   return `Goodbye, ${name}!`;
 }
+
+/** Returns a short celebration string for release testing. */
+export function celebrate(event = "release") {
+  return `🎉 ${event} shipped!`;
+}
