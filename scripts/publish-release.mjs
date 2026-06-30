@@ -74,11 +74,69 @@ Set ONE of:
   process.exit(1);
 }
 
-// Split a git tag like "@scope/pkg@1.2.3" or "pkg@1.2.3" into name + version.
-function parseTag(tag) {
-  const at = tag.lastIndexOf("@");
-  if (at <= 0) return null;
-  return { name: tag.slice(0, at), version: tag.slice(at + 1) };
+function publishablePackages() {
+  const out = [];
+  for (const entry of readdirSync("packages")) {
+    const dir = join("packages", entry);
+    if (!statSync(dir).isDirectory()) continue;
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+      if (pkg.private === true) continue;
+      out.push({ dir, name: pkg.name, version: pkg.version });
+    } catch {
+      // ignore
+    }
+  }
+  return out;
+}
+
+function tagExists(tag) {
+  try {
+    execOut(`git rev-parse "refs/tags/${tag}^{}"`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// changeset publish only tags packages it publishes in *this* run. After a partial
+// failure (one package on npm, another not), retried runs skip already-published
+// packages and never create their tags. Ensure every publishable package on
+// production has a git tag matching its package.json version.
+function ensurePackageTags() {
+  for (const pkg of publishablePackages()) {
+    const tag = `${pkg.name}@${pkg.version}`;
+    if (tagExists(tag)) continue;
+    console.log(`Creating missing tag ${tag}`);
+    run(`git tag "${tag}"`);
+  }
+}
+
+function ensureGitHubReleases(ghToken) {
+  for (const pkg of publishablePackages()) {
+    const tag = `${pkg.name}@${pkg.version}`;
+    try {
+      execSync(`gh release view "${tag}"`, {
+        stdio: "pipe",
+        env: { ...process.env, GH_TOKEN: ghToken },
+      });
+      continue;
+    } catch {
+      // release does not exist yet — create it
+    }
+
+    const notes = changelogSection(pkg.name, pkg.version);
+    if (notes) {
+      const notesFile = join(tmpdir(), `release-notes-${pkg.name.replace(/[^\w.-]+/g, "-")}-${pkg.version}.md`);
+      writeFileSync(notesFile, `${notes}\n`);
+      run(
+        `gh release create "${tag}" --title "${tag}" --notes-file "${notesFile}"`,
+        { GH_TOKEN: ghToken },
+      );
+    } else {
+      run(`gh release create "${tag}" --generate-notes`, { GH_TOKEN: ghToken });
+    }
+  }
 }
 
 // Extract the "## <version>" section from the package's CHANGELOG.md so release
@@ -144,39 +202,26 @@ function configureGitBot() {
 configureGitBot();
 
 ensureNpmAuth();
-run("pnpm exec changeset publish");
+
+let publishFailed = false;
+try {
+  run("pnpm exec changeset publish");
+} catch {
+  publishFailed = true;
+  console.warn(
+    "changeset publish reported errors — continuing to sync tags and GitHub releases…",
+  );
+}
+
+ensurePackageTags();
 run("git push --follow-tags origin production");
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-const tags = execSync("git tag --sort=-creatordate", { encoding: "utf8" })
-  .split("\n")
-  .filter(Boolean)
-  .slice(0, 5);
+ensureGitHubReleases(ghToken);
 
-for (const tag of tags) {
-  try {
-    execSync(`gh release view "${tag}"`, {
-      stdio: "pipe",
-      env: { ...process.env, GH_TOKEN: ghToken },
-    });
-    continue;
-  } catch {
-    // release does not exist yet — create it
-  }
-
-  const parsed = parseTag(tag);
-  const notes = parsed ? changelogSection(parsed.name, parsed.version) : null;
-
-  if (notes) {
-    const notesFile = join(tmpdir(), `release-notes-${parsed.version}.md`);
-    writeFileSync(notesFile, `${notes}\n`);
-    run(
-      `gh release create "${tag}" --title "${tag}" --notes-file "${notesFile}"`,
-      { GH_TOKEN: ghToken },
-    );
-  } else {
-    run(`gh release create "${tag}" --generate-notes`, { GH_TOKEN: ghToken });
-  }
+if (publishFailed) {
+  console.error("Publish finished with npm errors (tags/releases synced where possible).");
+  process.exit(1);
 }
 
 console.log("Publish complete.");
