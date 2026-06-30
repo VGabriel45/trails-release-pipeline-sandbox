@@ -1,6 +1,10 @@
 import { execSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  filterChangesetsByPackage,
+  restoreHeldChangesets,
+} from "./lib/filter-changesets.mjs";
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -254,6 +258,13 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
+try {
+  filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+
 const releaseAs = parseReleaseAs(process.env.RELEASE_AS);
 
 let released;
@@ -263,7 +274,11 @@ if (hasPendingChangesets()) {
   if (!releaseAs) capPre1MajorBumps();
 
   console.log("Pending changesets found — running changeset version…");
-  runChangesetVersionWithRetry();
+  try {
+    runChangesetVersionWithRetry();
+  } finally {
+    restoreHeldChangesets();
+  }
 
   if (releaseAs) {
     const autoVersions = new Map(

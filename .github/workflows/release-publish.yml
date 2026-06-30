@@ -9,6 +9,15 @@ on:
         description: "Release canary"
         type: boolean
         default: false
+      packages:
+        description: "Which package(s) to include in this release"
+        type: choice
+        default: All modified packages
+        options:
+          - All modified packages
+          # Add new publishable packages here when the monorepo grows.
+          - "@vgabriel45/demo-sdk"
+          - "@vgabriel45/demo-utils"
 
 permissions:
   id-token: write
@@ -65,21 +74,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Skip if no pending changesets
-        id: pending
-        run: |
-          if ls .changeset/*.md >/dev/null 2>&1; then
-            echo "has=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No pending changesets on master."
-          fi
-
-      - if: steps.pending.outputs.has == 'true'
+      - name: Publish canary snapshot to npm
         env:
-          CHANGESET_SNAPSHOT: "1"
-        run: pnpm exec changeset version --snapshot canary
-
-      - if: steps.pending.outputs.has == 'true'
-        env:
+          RELEASE_PACKAGES: ${{ inputs.packages }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node scripts/publish-canary.mjs
+        run: node scripts/run-canary.mjs

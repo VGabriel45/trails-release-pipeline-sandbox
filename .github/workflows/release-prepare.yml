@@ -7,6 +7,15 @@ on:
         description: "Override version: a single semver (e.g. 1.0.0) applies to all packages, or per-package 'name@1.0.0 other@0.4.0'. Blank = automatic."
         required: false
         default: ""
+      packages:
+        description: "Which package(s) to include in this release"
+        type: choice
+        default: All modified packages
+        options:
+          - All modified packages
+          # Add new publishable packages here when the monorepo grows.
+          - "@vgabriel45/demo-sdk"
+          - "@vgabriel45/demo-utils"
 
 permissions:
   contents: write
@@ -44,4 +53,5 @@ jobs:
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           RELEASE_AS: ${{ inputs.release_as }}
+          RELEASE_PACKAGES: ${{ inputs.packages }}
         run: node scripts/prepare-release.mjs

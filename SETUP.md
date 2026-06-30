@@ -21,7 +21,8 @@ scripts/ai-changeset.mjs
 scripts/changeset-check.mjs
 scripts/prepare-release.mjs
 scripts/publish-release.mjs
-scripts/publish-canary.mjs
+scripts/run-canary.mjs
+scripts/filter-changesets.mjs
 scripts/lib/*.mjs
 scripts/setup-repo.sh
 ```
@@ -65,6 +66,12 @@ writes per-package changelogs, and lists every changed package in the release PR
 title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
 `fixed`, `ignore`, `updateInternalDependencies`). For per-package version
 overrides, pass `name@version` pairs to the `release_as` input.
+
+**Selective release:** **Release (prepare)** and canary publish expose a
+**packages** dropdown (default: **All modified packages**). Choosing one package
+filters changesets before versioning; unselected changesets are held and restored
+on `master` after `changeset version`. Add new npm names to the `packages` choice
+list in `release-prepare.yml` and `release-publish.yml` when the monorepo grows.
 
 ## One-time per org: the GitHub App
 
