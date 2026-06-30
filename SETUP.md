@@ -57,6 +57,15 @@ the workflow `on:`/`ref:` fields. If your repo uses different names (e.g.
 (`ref:` + the script's branch refs), `release-publish.yml` (`branches:`), and
 `release-canary.yml` (`ref:`).
 
+## Monorepo
+
+Works out of the box for any number of packages under `packages/*`. Each
+package versions independently; the prepare step caps pre-1.0 bumps per package,
+writes per-package changelogs, and lists every changed package in the release PR
+title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
+`fixed`, `ignore`, `updateInternalDependencies`). For per-package version
+overrides, pass `name@version` pairs to the `release_as` input.
+
 ## One-time per org: the GitHub App
 
 Create a single GitHub App and reuse it across all repos (install per repo).

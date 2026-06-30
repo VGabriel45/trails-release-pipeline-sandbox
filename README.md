@@ -7,7 +7,8 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 - **`trails-sdk-release-bot`** GitHub App (App ID `4181013`) — commits AI changesets and runs prepare-release
 - **Changesets** with a portable `@changesets/changelog-github` wrapper (`.changeset/changelog.cjs`)
 - **Workflows:** AI changeset generation, changeset check, prepare, publish, canary
-- **`@vgabriel45/demo-sdk`** — minimal publishable package for end-to-end testing
+- **`@vgabriel45/demo-sdk`** and **`@vgabriel45/demo-utils`** — two publishable
+  packages so monorepo behavior (independent versions) is exercised end-to-end
 
 > **Reusing this on another repo?** The workflows/scripts are drop-in (no
 > hardcoded owner/repo/bot values). See [`SETUP.md`](./SETUP.md) and
@@ -63,8 +64,31 @@ To force an explicit version (e.g. to finally cut `1.0.0`), run **Release
 gh workflow run release-prepare.yml --ref master -f release_as=1.0.0
 ```
 
-`release_as` skips the pre-1.0 cap and sets every publishable package to that
-exact version (changelog entry included).
+`release_as` skips the pre-1.0 cap. A single semver applies to **all** packages
+(handy for a single-package repo).
+
+## Monorepo
+
+Each package versions **independently** — a release can bump `demo-sdk` to
+`1.1.0` and `demo-utils` to `0.2.0` at the same time. The prepare step:
+
+- bumps each package per its own changesets and writes each package's own
+  `CHANGELOG.md`;
+- applies the pre-1.0 cap **per package** (only `0.x` packages are capped);
+- titles the release PR with every changed package, e.g.
+  `Release: demo-sdk@1.1.0, demo-utils@0.2.0`.
+
+Publish then creates one git tag + one GitHub Release **per package**.
+
+For per-package overrides, pass `name@version` pairs to `release_as`:
+
+```
+gh workflow run release-prepare.yml --ref master \
+  -f release_as="@vgabriel45/demo-sdk@1.0.0 @vgabriel45/demo-utils@0.3.0"
+```
+
+Tune lockstep/independence and exclusions in `.changeset/config.json`
+(`linked`, `fixed`, `ignore`, `updateInternalDependencies`).
 
 ## Branches
 

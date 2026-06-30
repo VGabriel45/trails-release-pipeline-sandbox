@@ -20,6 +20,8 @@ importers:
 
   packages/demo-sdk: {}
 
+  packages/demo-utils: {}
+
 packages:
 
   '@anthropic-ai/sdk@0.105.0':
