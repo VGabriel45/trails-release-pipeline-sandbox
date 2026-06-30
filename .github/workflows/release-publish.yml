@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       canary:
-        description: "Publish pending changesets from master to npm @canary (snapshot test build)"
+        description: "Release canary"
         type: boolean
         default: false
 
