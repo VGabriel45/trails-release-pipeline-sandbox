@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 1.1.0
+
+### Minor Changes
+
+- [#9](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/9) [`beddedb`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/beddedb5bfc52633675258cd142d6be9d8d8e8e5) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Add greetEmoji helper
+
 ## 1.0.0
 
 ### Major Changes
