@@ -1,0 +1,48 @@
+name: Release (canary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: release-canary
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Skip if no pending changesets
+        id: pending
+        run: |
+          if ls .changeset/*.md >/dev/null 2>&1; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No pending changesets on master."
+          fi
+
+      - if: steps.pending.outputs.has == 'true'
+        run: pnpm exec changeset version --snapshot canary
+
+      - if: steps.pending.outputs.has == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm exec changeset publish --no-git-tag --tag canary

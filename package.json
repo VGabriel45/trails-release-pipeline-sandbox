@@ -1,0 +1,15 @@
+{
+  "name": "trails-release-pipeline-sandbox",
+  "private": true,
+  "scripts": {
+    "changeset": "changeset",
+    "prepare-release": "gh workflow run release-prepare.yml --ref master",
+    "publish-canary": "gh workflow run release-canary.yml --ref master",
+    "publish-release": "node scripts/publish-release.mjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@changesets/cli": "^2.31.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
