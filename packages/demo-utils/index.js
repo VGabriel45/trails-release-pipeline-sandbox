@@ -15,8 +15,9 @@ export function clamp(value, min, max) {
 
 /** Truncate text to a max length, appending an ellipsis when shortened. */
 export function truncate(text = "", maxLength = 80) {
+  const input = String(text ?? "");
   if (maxLength <= 0) return "";
-  if (text.length <= maxLength) return text;
+  if (input.length <= maxLength) return input;
   if (maxLength <= 1) return "…";
-  return `${text.slice(0, maxLength - 1)}…`;
+  return `${input.slice(0, maxLength - 1)}…`;
 }
