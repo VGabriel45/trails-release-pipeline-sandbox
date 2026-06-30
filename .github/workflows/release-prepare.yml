@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
     inputs:
       release_as:
-        description: "Override version: a single semver (e.g. 1.0.0) applies to all packages, or per-package 'name@1.0.0 other@0.4.0'. Blank = automatic."
         required: false
         default: ""
       packages:
