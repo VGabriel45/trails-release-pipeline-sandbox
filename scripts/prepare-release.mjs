@@ -71,6 +71,11 @@ runChangesetVersionWithRetry();
 const version = readReleaseVersion();
 console.log(`Release version: ${version}`);
 
+run('git config user.name "trails-sdk-release-bot[bot]"');
+run(
+  'git config user.email "4181013+trails-sdk-release-bot[bot]@users.noreply.github.com"',
+);
+
 run("git add -A");
 run(`git commit -m "chore(release): v${version}"`);
 run("git push origin master");
