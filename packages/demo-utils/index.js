@@ -10,7 +10,11 @@ export function slugify(text = "") {
 
 export function clamp(value, min, max) {
   if (min > max) [min, max] = [max, min];
-  return Math.min(Math.max(value, min), max);
+  const n = Number(value);
+  const lo = Number(min);
+  const hi = Number(max);
+  if (Number.isNaN(n) || Number.isNaN(lo) || Number.isNaN(hi)) return lo;
+  return Math.min(Math.max(n, lo), hi);
 }
 
 /** Truncate text to a max length, appending an ellipsis when shortened. */
