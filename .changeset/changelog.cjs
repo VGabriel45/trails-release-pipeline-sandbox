@@ -12,9 +12,33 @@ if (!repo) {
 
 const options = { repo };
 
+function plainReleaseLine(changeset) {
+  return `- ${changeset.summary}\n`;
+}
+
 module.exports = {
-  getReleaseLine: (changeset, type) =>
-    github.getReleaseLine(changeset, type, options),
-  getDependencyReleaseLine: (changesets, dependenciesUpdated) =>
-    github.getDependencyReleaseLine(changesets, dependenciesUpdated, options),
+  getReleaseLine: (changeset, type) => {
+    if (process.env.CHANGESET_PLAIN_CHANGELOG === "1") {
+      return Promise.resolve(plainReleaseLine(changeset));
+    }
+    return github.getReleaseLine(changeset, type, options).catch((err) => {
+      console.warn(
+        `changelog-github failed (${err.message}) — using plain summary.`,
+      );
+      return plainReleaseLine(changeset);
+    });
+  },
+  getDependencyReleaseLine: (changesets, dependenciesUpdated) => {
+    if (process.env.CHANGESET_PLAIN_CHANGELOG === "1") {
+      return Promise.resolve("");
+    }
+    return github
+      .getDependencyReleaseLine(changesets, dependenciesUpdated, options)
+      .catch((err) => {
+        console.warn(
+          `changelog-github dependency line failed (${err.message}) — skipping.`,
+        );
+        return "";
+      });
+  },
 };

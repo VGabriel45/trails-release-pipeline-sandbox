@@ -6,6 +6,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  pull-requests: read
 
 concurrency:
   group: release-canary
@@ -42,7 +43,17 @@ jobs:
       - if: steps.pending.outputs.has == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm exec changeset version --snapshot canary
+          # Canary snapshots skip GitHub GraphQL changelog lookups (faster, no API flake).
+          CHANGESET_PLAIN_CHANGELOG: "1"
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec changeset version --snapshot canary; then
+              exit 0
+            fi
+            echo "changeset version failed (attempt ${attempt}/3), retrying…"
+            sleep $((attempt * 5))
+          done
+          exit 1
 
       - if: steps.pending.outputs.has == 'true'
         env:
