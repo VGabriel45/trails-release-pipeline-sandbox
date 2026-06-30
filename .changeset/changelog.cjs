@@ -1,16 +1,22 @@
 // Portable changelog generator: wraps @changesets/changelog-github but resolves
 // the repo from the GITHUB_REPOSITORY env var (always "owner/repo" in GitHub
 // Actions) instead of a hardcoded value, so this file is drop-in for any repo.
+//
+// Set CHANGESET_SNAPSHOT=1 (canary workflow) to skip changelog output entirely —
+// snapshot builds only need a version bump + npm publish under the @canary tag.
 const github = require("@changesets/changelog-github").default;
 
-const repo = process.env.GITHUB_REPOSITORY;
-if (!repo) {
-  throw new Error(
-    "GITHUB_REPOSITORY env var is required for changelog generation (expected \"owner/repo\").",
-  );
-}
+const isSnapshot = process.env.CHANGESET_SNAPSHOT === "1";
 
-const options = { repo };
+function githubOptions() {
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) {
+    throw new Error(
+      'GITHUB_REPOSITORY env var is required for changelog generation (expected "owner/repo").',
+    );
+  }
+  return { repo };
+}
 
 function plainReleaseLine(changeset) {
   return `- ${changeset.summary}\n`;
@@ -18,10 +24,8 @@ function plainReleaseLine(changeset) {
 
 module.exports = {
   getReleaseLine: (changeset, type) => {
-    if (process.env.CHANGESET_PLAIN_CHANGELOG === "1") {
-      return Promise.resolve(plainReleaseLine(changeset));
-    }
-    return github.getReleaseLine(changeset, type, options).catch((err) => {
+    if (isSnapshot) return Promise.resolve("");
+    return github.getReleaseLine(changeset, type, githubOptions()).catch((err) => {
       console.warn(
         `changelog-github failed (${err.message}) — using plain summary.`,
       );
@@ -29,11 +33,9 @@ module.exports = {
     });
   },
   getDependencyReleaseLine: (changesets, dependenciesUpdated) => {
-    if (process.env.CHANGESET_PLAIN_CHANGELOG === "1") {
-      return Promise.resolve("");
-    }
+    if (isSnapshot) return Promise.resolve("");
     return github
-      .getDependencyReleaseLine(changesets, dependenciesUpdated, options)
+      .getDependencyReleaseLine(changesets, dependenciesUpdated, githubOptions())
       .catch((err) => {
         console.warn(
           `changelog-github dependency line failed (${err.message}) — skipping.`,
