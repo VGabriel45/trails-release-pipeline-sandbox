@@ -23,8 +23,7 @@ jobs:
         with:
           app-id: ${{ secrets.TRAILS_SDK_RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY }}
-          owner: VGabriel45
-          repositories: trails-release-pipeline-sandbox
+          # owner/repositories omitted → token is scoped to the current repo.
 
       - uses: actions/checkout@v4
         with:
@@ -42,11 +41,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Fetch base branch for diff
-        run: git fetch origin master
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
 
       - name: Generate changeset
         env:
-          BASE_BRANCH: master
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
@@ -58,9 +57,11 @@ jobs:
       - name: Commit changeset to PR branch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
-          git config user.name "trails-sdk-release-bot[bot]"
-          git config user.email "4181013+trails-sdk-release-bot[bot]@users.noreply.github.com"
+          USER_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
           git add .changeset/pr-${{ github.event.pull_request.number }}.md
           if git diff --cached --quiet; then
             echo "No changeset changes to commit."

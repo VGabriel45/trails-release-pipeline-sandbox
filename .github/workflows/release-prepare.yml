@@ -2,6 +2,11 @@ name: Release (prepare)
 
 on:
   workflow_dispatch:
+    inputs:
+      release_as:
+        description: "Override version: a single semver (e.g. 1.0.0) applies to all packages, or per-package 'name@1.0.0 other@0.4.0'. Blank = automatic."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -16,8 +21,7 @@ jobs:
         with:
           app-id: ${{ secrets.TRAILS_SDK_RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY }}
-          owner: VGabriel45
-          repositories: trails-release-pipeline-sandbox
+          # owner/repositories omitted → token is scoped to the current repo.
 
       - uses: actions/checkout@v4
         with:
@@ -38,4 +42,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          RELEASE_AS: ${{ inputs.release_as }}
         run: node scripts/prepare-release.mjs
