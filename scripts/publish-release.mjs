@@ -9,35 +9,41 @@ function execOut(cmd, env = process.env) {
 }
 
 function ensureNpmAuth() {
-  // Prefer explicit NPM_TOKEN secret (sandbox / first-time setup).
+  // A non-empty NPM_TOKEN takes precedence (token-based publish).
   if (process.env.NPM_TOKEN) {
     process.env.NODE_AUTH_TOKEN = process.env.NPM_TOKEN;
   }
 
-  if (!process.env.NODE_AUTH_TOKEN) {
-    console.error(`
+  if (process.env.NODE_AUTH_TOKEN) {
+    try {
+      const whoami = execOut("npm whoami --registry=https://registry.npmjs.org");
+      console.log(`npm authenticated via token as: ${whoami}`);
+    } catch {
+      console.error("npm whoami failed — NPM_TOKEN is present but not valid.");
+      process.exit(1);
+    }
+    return;
+  }
+
+  // No token: fall back to OIDC trusted publishing.
+  // Requires id-token: write permission + a trusted publisher configured on npm.
+  if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
+    console.log("No NPM_TOKEN — using npm OIDC trusted publishing.");
+    return;
+  }
+
+  console.error(`
 npm authentication is not configured.
 
 Set ONE of:
-  1. NPM_TOKEN repo secret — npm automation token (quickest for sandbox)
-  2. npm OIDC trusted publishing (after first publish) — @vgabriel45/demo-sdk → Trusted Publisher:
+  1. NPM_TOKEN repo secret — npm token with WRITE access to @vgabriel45 (Automation token recommended)
+  2. npm OIDC trusted publishing — @vgabriel45/demo-sdk → Settings → Trusted Publisher:
        owner: VGabriel45
        repo:  trails-release-pipeline-sandbox
        workflow: release-publish.yml
-
-First publish of a new scoped package requires NPM_TOKEN — OIDC is configured on npm after the package exists.
-Do NOT set NODE_AUTH_TOKEN to an empty NPM_TOKEN — that disables OIDC.
+     (needs "id-token: write" in the workflow and no NPM_TOKEN set)
 `);
-    process.exit(1);
-  }
-
-  try {
-    const whoami = execOut("npm whoami --registry=https://registry.npmjs.org");
-    console.log(`npm authenticated as: ${whoami}`);
-  } catch {
-    console.error("npm whoami failed — token/OIDC is present but not valid for npm publish.");
-    process.exit(1);
-  }
+  process.exit(1);
 }
 
 run('git config user.name "trails-sdk-release-bot[bot]"');
