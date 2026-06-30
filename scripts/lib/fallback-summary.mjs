@@ -1,22 +1,15 @@
 /** Build a changeset summary without an LLM. */
 export function buildFallbackSummary({
-  commits,
+  commitSubjects,
   changedFiles,
   cleanTitle,
   cleanBody,
   affected,
 }) {
-  const commitSubjects = commits
-    .split("\n")
-    .filter(Boolean)
-    .filter((s) => !/^chore\(changeset\):/i.test(s))
-    .map((s) =>
-      s.replace(/^(feat|fix|chore|docs|refactor)(\([^)]+\))?!?:\s*/i, "").trim(),
-    )
-    .filter(Boolean);
+  const subjects = commitSubjects.filter(Boolean);
 
-  if (commitSubjects.length > 0) {
-    const sentence = commitSubjects.join("; ");
+  if (subjects.length > 0) {
+    const sentence = subjects.join("; ");
     return sentence.charAt(0).toUpperCase() + sentence.slice(1, 281);
   }
 
@@ -32,3 +25,11 @@ export function buildFallbackSummary({
   );
   return `Update ${affected.join(", ")} (${pkgFiles.slice(0, 2).join(", ")})`;
 }
+
+/** Strip conventional-commit prefix from a subject line. */
+export function stripConventionalPrefix(subject) {
+  return subject
+    .replace(/^(feat|fix|chore|docs|refactor)(\([^)]+\))?!?:\s*/i, "")
+    .trim();
+}
+
