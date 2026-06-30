@@ -1,6 +1,8 @@
 import { execSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -50,6 +52,85 @@ function readReleaseVersion() {
   }
 
   return versions.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1);
+}
+
+function publishablePackages() {
+  const out = [];
+  for (const entry of readdirSync("packages")) {
+    const dir = join("packages", entry);
+    if (!statSync(dir).isDirectory()) continue;
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+      if (pkg.private === true) continue;
+      out.push({ dir, name: pkg.name, version: pkg.version });
+    } catch {
+      // ignore dirs without a valid package.json
+    }
+  }
+  return out;
+}
+
+// While a package is pre-1.0 (version 0.x) we don't follow strict semver yet:
+// a `major` bump would jump to 1.0.0, which we don't want during early dev.
+// Rewrite `major` -> `minor` in pending changesets for any 0.x package so the
+// second digit moves instead (e.g. 0.2.0 -> 0.3.0). Lifted automatically once a
+// package reaches 1.x, or overridden explicitly via release_as.
+function capPre1MajorBumps() {
+  const majorByName = new Map(
+    publishablePackages().map((p) => [
+      p.name,
+      Number(String(p.version).split(".")[0]),
+    ]),
+  );
+
+  let capped = false;
+  for (const file of readdirSync(".changeset")) {
+    if (!file.endsWith(".md")) continue;
+    const path = join(".changeset", file);
+    const raw = readFileSync(path, "utf8");
+    const updated = raw.replace(
+      /^("[^"]+"|[^\s:]+):[ \t]*major[ \t]*$/gim,
+      (line, nameToken) => {
+        const name = nameToken.replace(/"/g, "");
+        if (majorByName.get(name) === 0) {
+          capped = true;
+          return `${nameToken}: minor`;
+        }
+        return line;
+      },
+    );
+    if (updated !== raw) writeFileSync(path, updated);
+  }
+
+  if (capped) {
+    console.log(
+      "Pre-1.0: capped 'major' bumps to 'minor' (no automatic 1.0.0). Use release_as to override.",
+    );
+  }
+}
+
+// Force every publishable package to an explicit version and relabel the
+// changelog header that `changeset version` just wrote (autoVersion -> target).
+function forceVersion(target, autoVersion) {
+  if (!SEMVER_RE.test(target)) {
+    throw new Error(`Invalid release_as version: "${target}" (expected x.y.z)`);
+  }
+  for (const p of publishablePackages()) {
+    const pkgPath = join(p.dir, "package.json");
+    const pkgRaw = readFileSync(pkgPath, "utf8");
+    writeFileSync(
+      pkgPath,
+      pkgRaw.replace(/("version":\s*)"[^"]+"/, `$1"${target}"`),
+    );
+
+    const changelogPath = join(p.dir, "CHANGELOG.md");
+    try {
+      const md = readFileSync(changelogPath, "utf8");
+      writeFileSync(changelogPath, md.replace(`## ${autoVersion}`, `## ${target}`));
+    } catch {
+      // no CHANGELOG for this package
+    }
+  }
 }
 
 function hasPendingChangesets() {
@@ -105,12 +186,28 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
+const releaseAs = (process.env.RELEASE_AS ?? "").trim();
+if (releaseAs && !SEMVER_RE.test(releaseAs)) {
+  throw new Error(`Invalid release_as input: "${releaseAs}" (expected x.y.z)`);
+}
+
 let version;
 
 if (hasPendingChangesets()) {
+  // Explicit override wins; otherwise apply the pre-1.0 cap.
+  if (!releaseAs) capPre1MajorBumps();
+
   console.log("Pending changesets found — running changeset version…");
   runChangesetVersionWithRetry();
-  version = readReleaseVersion();
+  const autoVersion = readReleaseVersion();
+
+  if (releaseAs) {
+    forceVersion(releaseAs, autoVersion);
+    version = releaseAs;
+    console.log(`release_as override: ${autoVersion} -> ${releaseAs}`);
+  } else {
+    version = autoVersion;
+  }
   console.log(`Release version: ${version}`);
 
   configureGitBot();

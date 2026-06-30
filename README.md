@@ -36,6 +36,32 @@ After the package exists, you can optionally switch to **OIDC trusted publishing
 4. **Prepare release:** Actions → **Release (prepare)** → opens `master → production` PR
 5. Merge to `production` → **Release (publish)** runs
 
+## Versioning (pre-1.0)
+
+Packages still at `0.x` are treated as early-development and do **not** follow
+strict semver yet — we don't want a breaking change to auto-promote to `1.0.0`.
+While a package's version is `0.x`, prepare-release caps bumps:
+
+| PR token | Effect while `0.x` | Example |
+| --- | --- | --- |
+| `[patch]` | 3rd digit | `0.2.0 → 0.2.1` |
+| `[minor]` | 2nd digit | `0.2.0 → 0.3.0` |
+| `[major]` | 2nd digit (**capped**, no `1.0.0`) | `0.2.0 → 0.3.0` |
+
+The cap lifts automatically once a package reaches `1.x`.
+
+### Maintainer override (`release_as`)
+
+To force an explicit version (e.g. to finally cut `1.0.0`), run **Release
+(prepare)** with the `release_as` input:
+
+```
+gh workflow run release-prepare.yml --ref master -f release_as=1.0.0
+```
+
+`release_as` skips the pre-1.0 cap and sets every publishable package to that
+exact version (changelog entry included).
+
 ## Branches
 
 - `master` — integration + version source of truth

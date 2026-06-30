@@ -2,6 +2,11 @@ name: Release (prepare)
 
 on:
   workflow_dispatch:
+    inputs:
+      release_as:
+        description: "Override the released version, e.g. 1.0.0 (leave blank for automatic)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -38,4 +43,5 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_AS: ${{ inputs.release_as }}
         run: node scripts/prepare-release.mjs
