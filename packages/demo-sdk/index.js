@@ -20,6 +20,14 @@ export function greetEmoji(name = "world", emoji = "👋", options = {}) {
   return `${emoji} ${greet(name, options)}`;
 }
 
+/** Greet several people at once, joined with a separator. */
+export function greetMany(names = [], { separator = " ", ...options } = {}) {
+  return names
+    .filter((name) => name != null && String(name).trim() !== "")
+    .map((name) => greet(name, options))
+    .join(separator);
+}
+
 /** Title-case a display name for UI labels. */
 export function formatName(name = "") {
   return String(name ?? "")
