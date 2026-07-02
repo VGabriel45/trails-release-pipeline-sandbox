@@ -1,6 +1,7 @@
 /** Sandbox SDK — used to test the release pipeline. */
 export function greet(name = "world", { style = "default" } = {}) {
-  const message = `Hello, ${name}!`;
+  const trimmed = String(name ?? "").trim();
+  const message = `Hello, ${trimmed === "" ? "world" : trimmed}!`;
   if (style === "upper") return message.toUpperCase();
   if (style === "lower") return message.toLowerCase();
   return message;
