@@ -57,6 +57,22 @@ The cap lifts automatically once a package reaches `1.x`. To force a specific
 version (e.g. cutting `1.0.0`), set it in `package.json` on `master` before
 running **Release (prepare)**.
 
+## Changesets: skipping the AI or writing your own
+
+The AI changeset is the default, not the only path:
+
+- **Skip entirely (internal-only changes):** add the **`skip-changeset` label**
+  to the PR, or put `[skip-changeset]` in the title/description. The AI removes
+  any changeset it already generated and `changeset-check` passes — the PR ships
+  with no CHANGELOG entry and no version bump.
+- **Write it by hand:** run `pnpm changeset` locally and commit the generated
+  `.changeset/*.md` file with your PR. When a PR adds its own changeset, the AI
+  backs off (it won't generate or overwrite anything) and `changeset-check`
+  passes without needing a bump token in the title.
+
+Don't hand-edit the bot's `.changeset/pr-<n>.md` — it is regenerated on every
+push. Use `pnpm changeset` (any other filename) to take ownership.
+
 ## Monorepo
 
 Each package versions **independently** — a release can bump `demo-sdk` to

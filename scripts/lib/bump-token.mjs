@@ -6,8 +6,15 @@ const BUMP_RANK = { patch: 1, minor: 2, major: 3 };
 const BUMP_RE = /[@[](patch|minor|major)\b\]?/gi;
 const SKIP_RE = /[@[]?skip-changeset\b\]?/i;
 
-/** Parse [patch]/[minor]/[major]/[skip-changeset] (also @-prefixed) from title + body. */
-export function parseBumpToken(title = "", body = "") {
+/**
+ * Parse [patch]/[minor]/[major]/[skip-changeset] (also @-prefixed) from title + body.
+ * A `skip-changeset` PR label also opts out (pass label names as third arg).
+ */
+export function parseBumpToken(title = "", body = "", labels = []) {
+  if (labels.some((l) => l.toLowerCase() === "skip-changeset")) {
+    return { skip: true, bump: null };
+  }
+
   const text = `${title}\n${body}`;
   if (SKIP_RE.test(text)) {
     return { skip: true, bump: null };

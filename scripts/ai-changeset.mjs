@@ -5,12 +5,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { packagesFromChangedFiles, repoRoot } from "./lib/packages.mjs";
 import { parseBumpToken, stripBumpTokens } from "./lib/bump-token.mjs";
 import { buildFallbackSummary, stripConventionalPrefix } from "./lib/fallback-summary.mjs";
+import { manualChangesetFiles } from "./lib/manual-changesets.mjs";
 
 const ROOT = repoRoot();
 const BASE = process.env.BASE_BRANCH ?? "master";
 const PR_NUMBER = process.env.PR_NUMBER;
 const PR_TITLE = process.env.PR_TITLE ?? "";
 const PR_BODY = process.env.PR_BODY ?? "";
+const PR_LABELS = (process.env.PR_LABELS ?? "")
+  .split(",")
+  .map((l) => l.trim())
+  .filter(Boolean);
 const HEAD_REF = process.env.HEAD_REF;
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6";
 
@@ -47,7 +52,7 @@ const changedFiles = execSync(`git diff --name-only origin/${BASE}...HEAD`, {
   .filter(Boolean);
 
 const affected = packagesFromChangedFiles(changedFiles);
-const { skip, bump } = parseBumpToken(PR_TITLE, PR_BODY);
+const { skip, bump } = parseBumpToken(PR_TITLE, PR_BODY, PR_LABELS);
 const changesetPath = join(ROOT, ".changeset", `pr-${PR_NUMBER}.md`);
 
 if (affected.length === 0) {
@@ -57,7 +62,16 @@ if (affected.length === 0) {
 
 if (skip) {
   if (existsSync(changesetPath)) unlinkSync(changesetPath);
-  console.log("[skip-changeset] — removed changeset if present.");
+  console.log("skip-changeset (token or label) — removed changeset if present.");
+  process.exit(0);
+}
+
+const manual = manualChangesetFiles(changedFiles, PR_NUMBER);
+if (manual.length > 0) {
+  if (existsSync(changesetPath)) unlinkSync(changesetPath);
+  console.log(
+    `Manual changeset present (${manual.join(", ")}) — skipping AI generation.`,
+  );
   process.exit(0);
 }
 

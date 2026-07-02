@@ -125,6 +125,13 @@ The script:
 | `ANTHROPIC_API_KEY` | optional | LLM prose for changesets (falls back to commit-based summary) |
 | `NPM_TOKEN` | depends | npm publish when not using OIDC, or first publish of a new package |
 
+## Changeset escape hatches
+
+- **`skip-changeset` label** (or `[skip-changeset]` in the PR title/body) —
+  internal-only change: no changeset, no bump, check passes.
+- **Manual changeset** — commit a `pnpm changeset`-generated `.changeset/*.md`
+  in the PR; the AI generator backs off and the check passes without a bump token.
+
 ## Verify
 
 1. Actions → **Verify App Token** → Run workflow (confirms the app token works).
