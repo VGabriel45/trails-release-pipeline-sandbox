@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
+import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -19,19 +20,7 @@ function execOut(cmd, env = process.env) {
 }
 
 function publishablePackages() {
-  const out = [];
-  for (const entry of readdirSync("packages")) {
-    const dir = join("packages", entry);
-    if (!statSync(dir).isDirectory()) continue;
-    try {
-      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-      if (pkg.private === true) continue;
-      out.push({ dir, name: pkg.name, version: pkg.version });
-    } catch {
-      // ignore
-    }
-  }
-  return out;
+  return getPublishablePackageEntries();
 }
 
 function tagExists(tag) {

@@ -5,6 +5,7 @@ import {
   filterChangesetsByPackage,
   restoreHeldChangesets,
 } from "./lib/filter-changesets.mjs";
+import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
@@ -76,19 +77,7 @@ function commitMessage(released) {
 }
 
 function publishablePackages() {
-  const out = [];
-  for (const entry of readdirSync("packages")) {
-    const dir = join("packages", entry);
-    if (!statSync(dir).isDirectory()) continue;
-    try {
-      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-      if (pkg.private === true) continue;
-      out.push({ dir, name: pkg.name, version: pkg.version });
-    } catch {
-      // ignore dirs without a valid package.json
-    }
-  }
-  return out;
+  return getPublishablePackageEntries();
 }
 
 // While a package is pre-1.0 (version 0.x) we don't follow strict semver yet:
