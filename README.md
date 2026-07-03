@@ -6,7 +6,7 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 
 - **`trails-sdk-release-bot`** GitHub App (App ID `4181013`) — commits AI changesets and runs prepare-release
 - **Changesets** with a portable `@changesets/changelog-github` wrapper (`.changeset/changelog.cjs`)
-- **Workflows:** AI changeset generation, changeset check, prepare, publish, canary
+- **Workflows:** AI changeset generation, changeset check, prepare, publish, canary (dedicated + safety-net)
 - **`@vgabriel45/demo-sdk`** and **`@vgabriel45/demo-utils`** — two publishable
   packages so monorepo behavior (independent versions) is exercised end-to-end
 
@@ -29,7 +29,7 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 
 1. [npmjs.com](https://www.npmjs.com) → Access Tokens → **Automation** token (publish scope for your account)
 2. Repo → Settings → Secrets → Actions → add **`NPM_TOKEN`**
-3. Push these changes to `production`, then run **Release (publish)** (or re-run the workflow)
+3. Push these changes to `production` — the push triggers **Publish release** (or re-run the failed workflow run)
 
 After the package exists, you can optionally switch to **OIDC trusted publishing** (npm → package → Trusted Publisher → `VGabriel45/trails-release-pipeline-sandbox` / `release-publish.yml`) and remove `NPM_TOKEN`.
 
@@ -38,8 +38,8 @@ After the package exists, you can optionally switch to **OIDC trusted publishing
 1. **Verify app token:** Actions → **Verify App Token** → Run workflow
 2. **Open a PR** to `master` with `[patch]` in the title, change `packages/demo-sdk/index.js`
 3. CI generates `.changeset/pr-<n>.md` and commits it back
-4. **Prepare release:** Actions → **Release (prepare)** → pick package (default: **All modified packages**) → opens `master → production` PR
-5. Merge to `production` → **Release (publish)** runs
+4. **Prepare release:** Actions → **Prepare release** → pick package (default: **All modified packages**) → opens `master → production` PR
+5. Merge to `production` → **Publish release** runs
 
 ## Versioning (pre-1.0)
 
@@ -55,7 +55,41 @@ While a package's version is `0.x`, prepare-release caps bumps:
 
 The cap lifts automatically once a package reaches `1.x`. To force a specific
 version (e.g. cutting `1.0.0`), set it in `package.json` on `master` before
-running **Release (prepare)**.
+running **Prepare release**.
+
+## Changesets: skipping the AI or writing your own
+
+The AI changeset is the default, not the only path:
+
+- **Skip entirely (internal-only changes):** add the **`skip-changeset` label**
+  to the PR, or put `[skip-changeset]` in the title/description. The AI removes
+  any changeset it already generated and `changeset-check` passes — the PR ships
+  with no CHANGELOG entry and no version bump.
+- **Write it by hand:** run `pnpm changeset` locally and commit the generated
+  `.changeset/*.md` file with your PR. When a PR adds its own changeset, the AI
+  backs off (it won't generate or overwrite anything) and `changeset-check`
+  passes without needing a bump token in the title.
+
+Don't hand-edit the bot's `.changeset/pr-<n>.md` — it is regenerated on every
+push. Use `pnpm changeset` (any other filename) to take ownership.
+
+### Ignoring packages (no auto changeset, no release)
+
+Add npm package names to the **`ignore`** array in `.changeset/config.json`:
+
+```json
+{
+  "ignore": ["@0xtrails/demo", "internal-playground"]
+}
+```
+
+Ignored packages are excluded from AI changeset generation, `changeset-check`,
+prepare, and publish. PRs that only touch ignored packages need no bump token
+and get no changeset. Use this for demos, examples, or internal tooling that
+lives under `packages/` but should not ship to npm.
+
+Packages with `"private": true` in `package.json` are excluded automatically —
+`ignore` is for folders that are public on disk but outside the release pipeline.
 
 ## Monorepo
 
@@ -72,7 +106,7 @@ Publish then creates one git tag + one GitHub Release **per package**.
 
 ### Selective release (`packages`)
 
-When several packages have pending changesets, **Release (prepare)** and canary
+When several packages have pending changesets, **Prepare release** and canary
 publish expose a **packages** dropdown (default: **All modified packages**).
 Choosing a single package filters changesets before `changeset version`; held
 changesets for other packages are restored on `master` so they can ship in a
@@ -93,3 +127,19 @@ Tune lockstep/independence and exclusions in `.changeset/config.json`
 
 - `master` — integration + version source of truth
 - `production` — released snapshot; merge triggers publish
+
+## Release authorization
+
+**Only admins can release.** The publish workflow is not manually triggerable:
+
+- **Publish** runs **only on a push to `production`** — i.e. an admin approving
+  and merging the `master → production` release PR. There is no
+  `workflow_dispatch` path to a real release.
+- **Manual dispatch** of the Publish release workflow only runs the **canary**
+  job: an ephemeral snapshot under the `@canary` dist-tag that never moves
+  `latest`, never creates tags or GitHub Releases, and never consumes changesets.
+- `production` must only advance from `master` (the release PR). Enforce with a
+  ruleset: require a PR, restrict who can push, and require admin review
+  (public repo or paid plan for private repos).
+- Admins who are npm package owners can still `npm publish` from their machine
+  if ever needed; nobody else has a publish path.

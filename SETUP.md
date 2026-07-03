@@ -16,6 +16,7 @@ Copy these into the target repo (paths unchanged):
 .github/workflows/changeset-check.yml
 .github/workflows/release-prepare.yml
 .github/workflows/release-publish.yml
+.github/workflows/release-canary.yml
 .github/workflows/verify-app-token.yml
 scripts/ai-changeset.mjs
 scripts/changeset-check.mjs
@@ -32,8 +33,9 @@ Then merge into the target `package.json`:
 ```jsonc
 {
   "scripts": {
+    "build": "pnpm -r --if-present run build",
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
-    "publish-canary": "gh workflow run release-publish.yml --ref master -f canary=true"
+    "publish-canary": "gh workflow run release-canary.yml --ref master"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.105.0",          // omit if using GitHub Models
@@ -44,6 +46,11 @@ Then merge into the target `package.json`:
 ```
 
 Run your package manager install to update the lockfile.
+
+Each publishable package should define its own `"build"` script (e.g. `tsdown`,
+`tsc`). The root `"build"` script runs `pnpm -r --if-present run build`, so
+packages without a build step are skipped. **Publish release** runs `pnpm build`
+before npm publish (production and canary jobs).
 
 ## Branch convention (the one thing that's a fixed name)
 
@@ -64,10 +71,11 @@ Works out of the box for any number of packages under `packages/*`. Each
 package versions independently; the prepare step caps pre-1.0 bumps per package,
 writes per-package changelogs, and lists every changed package in the release PR
 title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
-`fixed`, `ignore`, `updateInternalDependencies`). To force a specific version,
-edit `package.json` on `master` before running prepare.
+`fixed`, `ignore`, `updateInternalDependencies`). List npm names in **`ignore`**
+to skip AI changesets, version bumps, and publish for packages under `packages/`
+(e.g. demos or internal apps). `"private": true` packages are already excluded.
 
-**Selective release:** **Release (prepare)** and canary publish expose a
+**Selective release:** **Prepare release** and canary publish expose a
 **packages** dropdown (default: **All modified packages**). Choosing one package
 filters changesets before versioning; unselected changesets are held and restored
 on `master` after `changeset version`. Add new npm names to the `packages` choice
@@ -112,9 +120,12 @@ The script:
   workflow `release-publish.yml`, no `NPM_TOKEN`) or provide an Automation
   `NPM_TOKEN` with write/create access. First publish of a brand-new package
   name requires a token.
-- **Admin review gate** (optional) — protect `production` with a required
-  review (needs a public repo or a paid plan for private repos), or gate the
-  publish job behind a GitHub Environment with required reviewers.
+- **Admin review gate** — protect `production` with a ruleset: require a pull
+  request (no direct pushes), restrict merge to admins, and require an admin
+  review (needs a public repo or a paid plan for private repos). The publish
+  job only fires on a push to `production`, so this PR gate is the single
+  release authorization point — the workflow itself cannot be dispatched into
+  a real release (manual dispatch = canary snapshot only).
 
 ## Secrets reference
 
@@ -125,9 +136,16 @@ The script:
 | `ANTHROPIC_API_KEY` | optional | LLM prose for changesets (falls back to commit-based summary) |
 | `NPM_TOKEN` | depends | npm publish when not using OIDC, or first publish of a new package |
 
+## Changeset escape hatches
+
+- **`skip-changeset` label** (or `[skip-changeset]` in the PR title/body) —
+  internal-only change: no changeset, no bump, check passes.
+- **Manual changeset** — commit a `pnpm changeset`-generated `.changeset/*.md`
+  in the PR; the AI generator backs off and the check passes without a bump token.
+
 ## Verify
 
 1. Actions → **Verify App Token** → Run workflow (confirms the app token works).
 2. Open a PR to `master` with `[patch]` in the title that changes a package.
 3. Confirm the **AI Changeset** workflow commits `.changeset/pr-<n>.md` back.
-4. Run **Release (prepare)**, then merge the `master → production` PR to publish.
+4. Run **Prepare release**, then merge the `master → production` PR to publish.

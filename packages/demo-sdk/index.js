@@ -1,13 +1,15 @@
 /** Sandbox SDK — used to test the release pipeline. */
 export function greet(name = "world", { style = "default" } = {}) {
-  const message = `Hello, ${name}!`;
+  const trimmed = String(name ?? "").trim();
+  const message = `Hello, ${trimmed === "" ? "world" : trimmed}!`;
   if (style === "upper") return message.toUpperCase();
   if (style === "lower") return message.toLowerCase();
   return message;
 }
 
 export function farewell(name = "world") {
-  return `Goodbye, ${name}!`;
+  const trimmed = String(name ?? "").trim();
+  return `Goodbye, ${trimmed === "" ? "world" : trimmed}!`;
 }
 
 /** Returns a short celebration string for release testing. */
@@ -18,6 +20,19 @@ export function celebrate(event = "release") {
 /** Greet with a leading emoji (defaults to wave). */
 export function greetEmoji(name = "world", emoji = "👋", options = {}) {
   return `${emoji} ${greet(name, options)}`;
+}
+
+/** Greet several people at once, joined with a separator. */
+export function greetMany(names = [], { separator = " ", ...options } = {}) {
+  return names
+    .filter((name) => name != null && String(name).trim() !== "")
+    .map((name) => greet(name, options))
+    .join(separator);
+}
+
+/** Greet two people with an "and" joiner. */
+export function greetPair(first = "world", second = "world", options = {}) {
+  return `${greet(first, options)} and ${greet(second, options)}`;
 }
 
 /** Title-case a display name for UI labels. */

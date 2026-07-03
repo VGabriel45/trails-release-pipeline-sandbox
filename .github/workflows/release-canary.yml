@@ -1,0 +1,31 @@
+name: Publish canary release
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Which package(s) to include in the canary"
+        type: choice
+        default: All modified packages
+        options:
+          - All modified packages
+          # Add new publishable packages here when the monorepo grows.
+          - "@vgabriel45/demo-sdk"
+          - "@vgabriel45/demo-utils"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch canary publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger release-publish canary safety-net workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run release-publish.yml \
+            --ref master \
+            -f packages="${{ inputs.packages }}"

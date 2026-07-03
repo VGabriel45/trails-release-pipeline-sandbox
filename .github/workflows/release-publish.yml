@@ -1,16 +1,15 @@
-name: Release (publish)
+name: Publish release
 
 on:
   push:
     branches: [production]
+  # workflow_dispatch is ONLY for canary snapshots (ephemeral, @canary dist-tag,
+  # never moves `latest`). A real release publishes exclusively via a push to
+  # production, i.e. an admin merging the master -> production release PR.
   workflow_dispatch:
     inputs:
-      canary:
-        description: "Release canary"
-        type: boolean
-        default: false
       packages:
-        description: "Which package(s) to include in this release"
+        description: "Which package(s) to include in the canary"
         type: choice
         default: All modified packages
         options:
@@ -24,12 +23,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.canary && 'canary' || 'production' }}
+  group: release-publish-${{ github.event_name == 'workflow_dispatch' && 'canary' || 'production' }}
   cancel-in-progress: false
 
 jobs:
-  production:
-    if: github.event_name == 'push' || inputs.canary != true
+  publish:
+    name: Publish
+    # Only a push to production (the merged master -> production release PR)
+    # can publish a real release. Never triggerable manually.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,14 +48,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build packages
+        run: pnpm build
+
       - name: Publish release to npm
         env:
           GH_TOKEN: ${{ github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs
 
-  canary:
-    if: github.event_name == 'workflow_dispatch' && inputs.canary == true
+  publish-canary:
+    name: Publish canary
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -73,6 +79,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
 
       - name: Publish canary snapshot to npm
         env:

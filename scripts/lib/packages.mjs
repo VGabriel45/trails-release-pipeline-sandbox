@@ -12,22 +12,31 @@ export function getIgnoredPackages() {
   return new Set(config.ignore ?? []);
 }
 
-/** Walk packages/* and return publishable package names. */
-export function getPublishablePackages() {
+/** Walk packages/* and return publishable package metadata (respects private + ignore). */
+export function getPublishablePackageEntries() {
   const ignored = getIgnoredPackages();
-  const names = [];
+  const out = [];
   const packagesDir = join(ROOT, "packages");
 
   for (const entry of readdirSync(packagesDir)) {
-    const pkgDir = join(packagesDir, entry);
-    if (!statSync(pkgDir).isDirectory()) continue;
-    const pkgPath = join(pkgDir, "package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-    if (pkg.private === true) continue;
-    if (ignored.has(pkg.name)) continue;
-    names.push(pkg.name);
+    const dir = join(packagesDir, entry);
+    if (!statSync(dir).isDirectory()) continue;
+    const pkgPath = join(dir, "package.json");
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+      if (pkg.private === true) continue;
+      if (ignored.has(pkg.name)) continue;
+      out.push({ dir: join("packages", entry), name: pkg.name, version: pkg.version });
+    } catch {
+      // ignore dirs without a valid package.json
+    }
   }
-  return names.sort();
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Walk packages/* and return publishable package names. */
+export function getPublishablePackages() {
+  return getPublishablePackageEntries().map((p) => p.name);
 }
 
 /** Map changed file paths to affected publishable package names. */
