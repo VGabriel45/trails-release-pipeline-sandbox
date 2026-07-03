@@ -26,3 +26,13 @@ export function truncate(text = "", maxLength = 80) {
   if (maxLength <= 1) return "…";
   return `${input.slice(0, maxLength - 1)}…`;
 }
+
+/** Convert text to snake_case (letters/numbers only). */
+export function snakeCase(text = "") {
+  return String(text ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
