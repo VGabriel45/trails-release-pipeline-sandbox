@@ -16,7 +16,7 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 
 ## Secrets (repo)
 
-| Secret | Purpose |
+| Secret | Purpose |.
 | --- | --- |
 | `TRAILS_SDK_RELEASE_BOT_APP_ID` | GitHub App ID |
 | `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY` | App private key (PEM) |
