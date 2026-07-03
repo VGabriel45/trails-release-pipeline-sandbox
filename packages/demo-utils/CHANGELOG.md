@@ -1,5 +1,11 @@
 # @vgabriel45/demo-utils
 
+## 0.2.1
+
+### Patch Changes
+
+- [#21](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/21) [`3b60b81`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/3b60b81b973375657b3ad68908b94446746be502) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Fixed `slugify` to collapse consecutive dashes into a single dash in the output.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,19 @@
 # @vgabriel45/demo-sdk
 
+## 1.3.0
+
+### Minor Changes
+
+- [#17](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/17) [`e5618d0`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/e5618d03a90ebf564ee4da6d33edad779fe79b9c) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Added `greetMany(names, options)` to greet multiple names at once, joined by a configurable separator and skipping empty entries.
+
+- [#20](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/20) [`e852999`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/e852999b95f4f640fed3eaa7407e05aa9cabe8b7) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Added `greetPair` helper to greet two people joined with "and".
+
+### Patch Changes
+
+- [#18](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/18) [`061f228`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/061f228c3bfbcdd351338df988a0e0c0d804aff0) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Fixed `greet()` to fall back to `"world"` when called with an empty string, whitespace-only, or nullish name instead of producing `"Hello, !"`.
+
+- [#22](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/22) [`9e3f6ca`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/9e3f6ca327b98e21a684fc33a2b9c56de01b764c) Thanks [@VGabriel45](https://github.com/VGabriel45)! - `farewell` now falls back to `"world"` when called with an empty or whitespace-only name.
+
 ## 1.2.0
 
 ### Minor Changes
