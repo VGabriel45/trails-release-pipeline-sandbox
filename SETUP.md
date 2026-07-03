@@ -100,7 +100,6 @@ runtime — nothing to hardcode.
 APP_ID=123456 \
 APP_PRIVATE_KEY_FILE=./app.private-key.pem \
 ANTHROPIC_API_KEY=sk-ant-... \
-NPM_TOKEN=npm_... \
 bash scripts/setup-repo.sh
 ```
 
@@ -109,17 +108,14 @@ The script:
 1. Detects the repo via `gh`.
 2. Creates the `production` branch from the default branch if missing.
 3. Sets the secrets it was given (`TRAILS_SDK_RELEASE_BOT_APP_ID`,
-   `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY`, and optional `ANTHROPIC_API_KEY` /
-   `NPM_TOKEN`).
+   `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY`, and optional `ANTHROPIC_API_KEY`).
 4. Prints the remaining manual checklist.
 
 ## Manual steps the script can't do
 
-- **npm auth** — for each published package, either configure **OIDC trusted
-  publishing** (npm package → Settings → Trusted Publisher → `owner/repo`,
-  workflow `release-publish.yml`, no `NPM_TOKEN`) or provide an Automation
-  `NPM_TOKEN` with write/create access. First publish of a brand-new package
-  name requires a token.
+- **npm auth** — configure **OIDC trusted publishing** for each published
+  package (npm package → Settings → Trusted Publisher → `owner/repo`,
+  workflow `release-publish.yml`). This pipeline does not use `NPM_TOKEN`.
 - **Admin review gate** — protect `production` with a ruleset: require a pull
   request (no direct pushes), restrict merge to admins, and require an admin
   review (needs a public repo or a paid plan for private repos). The publish
@@ -134,7 +130,6 @@ The script:
 | `TRAILS_SDK_RELEASE_BOT_APP_ID` | yes | GitHub App ID |
 | `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY` | yes | GitHub App private key (PEM) |
 | `ANTHROPIC_API_KEY` | optional | LLM prose for changesets (falls back to commit-based summary) |
-| `NPM_TOKEN` | depends | npm publish when not using OIDC, or first publish of a new package |
 
 ## Changeset escape hatches
 

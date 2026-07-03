@@ -1,14 +1,6 @@
-import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-
-function execOut(cmd, env = process.env) {
-  return execSync(cmd, {
-    encoding: "utf8",
-    env: { ...process.env, ...env },
-  }).trim();
-}
 
 function npmrcPath() {
   return process.env.NPM_CONFIG_USERCONFIG || join(homedir(), ".npmrc");
@@ -33,23 +25,9 @@ export function ensureNpmAuth(options = {}) {
   const workflows = options.workflows ?? ["release-publish.yml"];
   const workflowList = workflows.map((w) => `       workflow: ${w}`).join("\n");
 
-  const token = process.env.NPM_TOKEN;
-
-  if (token) {
-    process.env.NODE_AUTH_TOKEN = token;
-    try {
-      const whoami = execOut("npm whoami --registry=https://registry.npmjs.org");
-      console.log(`npm authenticated via token as: ${whoami}`);
-    } catch {
-      console.error("npm whoami failed — NPM_TOKEN is present but not valid.");
-      process.exit(1);
-    }
-    return;
-  }
-
   if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
     clearNpmrcAuth();
-    console.log("No NPM_TOKEN — publishing via npm OIDC trusted publishing.");
+    console.log("Publishing via npm OIDC trusted publishing.");
     return;
   }
 
@@ -57,13 +35,10 @@ export function ensureNpmAuth(options = {}) {
   console.error(`
 npm authentication is not configured.
 
-Set ONE of:
-  1. NPM_TOKEN repo secret — npm token with WRITE access to the package scope
-     (Automation token recommended).
-  2. npm OIDC trusted publishing — on each package's npm Settings → Trusted Publisher:
-       repo:     ${repo}
+This pipeline is OIDC-only. Configure npm trusted publishing on each package:
+  repo:     ${repo}
 ${workflowList}
-     (needs "id-token: write" in the workflow and no NPM_TOKEN set)
+(needs "id-token: write" in the workflow)
 `);
   process.exit(1);
 }

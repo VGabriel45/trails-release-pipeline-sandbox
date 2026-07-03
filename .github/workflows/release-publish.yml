@@ -73,7 +73,6 @@ jobs:
       - name: Publish release to npm
         env:
           GH_TOKEN: ${{ github.token }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs
 
   publish-canary:
@@ -105,5 +104,4 @@ jobs:
       - name: Publish canary snapshot to npm
         env:
           RELEASE_PACKAGES: ${{ inputs.packages }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/run-canary.mjs
