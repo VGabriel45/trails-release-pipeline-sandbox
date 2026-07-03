@@ -25,8 +25,10 @@ jobs:
       - name: Trigger release-publish canary safety-net workflow
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh workflow run release-publish.yml \
+            --repo "$GH_REPO" \
             --ref master \
             -f mode="canary" \
             -f packages="${{ inputs.packages }}"
