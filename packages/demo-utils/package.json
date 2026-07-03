@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/demo-utils",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": false,
   "description": "Second publishable package to exercise monorepo releases in the sandbox",
   "main": "index.js",
