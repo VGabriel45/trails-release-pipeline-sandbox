@@ -29,10 +29,11 @@ export function truncate(text = "", maxLength = 80) {
 
 /** Convert text to snake_case (letters/numbers only). */
 export function snakeCase(text = "") {
-  return String(text ?? "")
+  const snake = String(text ?? "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
+  return snake || "untitled";
 }
