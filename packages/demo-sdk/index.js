@@ -29,6 +29,11 @@ export function greetMany(names = [], { separator = " ", ...options } = {}) {
     .join(separator);
 }
 
+/** Greet two people with an "and" joiner. */
+export function greetPair(first = "world", second = "world", options = {}) {
+  return `${greet(first, options)} and ${greet(second, options)}`;
+}
+
 /** Title-case a display name for UI labels. */
 export function formatName(name = "") {
   return String(name ?? "")
