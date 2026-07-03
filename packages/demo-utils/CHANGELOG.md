@@ -1,5 +1,11 @@
 # @vgabriel45/demo-utils
 
+## 0.3.1
+
+### Patch Changes
+
+- [#31](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/31) [`7d5c31e`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/7d5c31e2c372f7ef190bd0c04ea6df3ea618a6ca) Thanks [@VGabriel45](https://github.com/VGabriel45)! - `snakeCase` now returns `"untitled"` instead of an empty string when the input produces no valid characters.
+
 ## 0.3.0
 
 ### Minor Changes
