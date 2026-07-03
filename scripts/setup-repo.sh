@@ -6,7 +6,6 @@
 #   APP_ID=123456 \
 #   APP_PRIVATE_KEY_FILE=./app.private-key.pem \
 #   ANTHROPIC_API_KEY=sk-ant-... \   # optional
-#   NPM_TOKEN=npm_... \              # optional
 #   bash scripts/setup-repo.sh
 #
 # Re-runnable: skips work that is already done.
@@ -52,14 +51,13 @@ if [ -n "${APP_PRIVATE_KEY_FILE:-}" ]; then
 fi
 
 set_secret "ANTHROPIC_API_KEY" "${ANTHROPIC_API_KEY:-}"
-set_secret "NPM_TOKEN" "${NPM_TOKEN:-}"
 
 echo
 echo "Remaining manual steps:"
 echo "  • Install the GitHub App on $REPO (if not already)."
 echo "  • npm auth: configure OIDC trusted publishing for each package"
 echo "      (npm package → Settings → Trusted Publisher → repo $REPO,"
-echo "       workflow release-publish.yml), or provide NPM_TOKEN with write access."
+echo "       workflow release-publish.yml)."
 echo "  • Optional: protect '$PROD_BRANCH' with a required admin review."
 echo
 echo "Verify: Actions → 'Verify App Token' → Run workflow."
