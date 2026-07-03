@@ -1,6 +1,10 @@
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { filterChangesetsByPackage } from "./lib/filter-changesets.mjs";
+import { existsSync, writeFileSync } from "node:fs";
+import {
+  filterChangesetsByPackage,
+  packagesInPendingChangesets,
+  parsePackageSelection,
+} from "./lib/filter-changesets.mjs";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
 import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
@@ -89,16 +93,30 @@ function changedPackagesSinceLastCanary(selected) {
   return changed;
 }
 
-let selectedPackages;
-try {
-  selectedPackages = filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
-} catch (err) {
-  console.error(err.message);
-  process.exit(1);
+function selectedPackagesFromInput(raw) {
+  const entries = getPublishablePackageEntries();
+  const available = entries.map((p) => p.name);
+  const allow = parsePackageSelection(raw ?? "all");
+  if (!allow) return available;
+  return available.filter((name) => allow.has(name));
 }
 
-if (!hasPendingChangesets()) {
-  console.error("No pending changesets after filtering.");
+function writeSyntheticCanaryChangeset(packageNames) {
+  if (packageNames.length === 0) return;
+  const frontmatter = packageNames
+    .map((name) => `"${name}": patch`)
+    .join("\n");
+  const body = "Synthetic canary snapshot (no pending changesets).";
+  const file = ".changeset/canary-snapshot-auto.md";
+  writeFileSync(file, `---\n${frontmatter}\n---\n${body}\n`);
+  console.log(
+    `Created synthetic canary changeset for: ${packageNames.join(", ")}.`,
+  );
+}
+
+const selectedPackages = selectedPackagesFromInput(process.env.RELEASE_PACKAGES);
+if (selectedPackages.length === 0) {
+  console.error("No publishable packages match RELEASE_PACKAGES.");
   process.exit(1);
 }
 
@@ -108,12 +126,13 @@ if (changedPackages.length === 0) {
   process.exit(0);
 }
 
-if (changedPackages.length < selectedPackages.length) {
+const pendingBefore = packagesInPendingChangesets();
+if (pendingBefore.length > 0 && changedPackages.length < selectedPackages.length) {
   filterChangesetsByPackage(changedPackages.join(" "));
-  if (!hasPendingChangesets()) {
-    console.log("No pending changesets after canary staleness filter. Skipping.");
-    process.exit(0);
-  }
+}
+
+if (!hasPendingChangesets()) {
+  writeSyntheticCanaryChangeset(changedPackages);
 }
 
 process.env.CHANGESET_SNAPSHOT = "1";
