@@ -28,4 +28,5 @@ jobs:
         run: |
           gh workflow run release-publish.yml \
             --ref master \
+            -f mode="canary" \
             -f packages="${{ inputs.packages }}"

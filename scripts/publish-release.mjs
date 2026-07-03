@@ -32,16 +32,36 @@ function tagExists(tag) {
   }
 }
 
+function tagExistsRemote(tag) {
+  try {
+    const out = execOut(`git ls-remote --tags origin "refs/tags/${tag}"`);
+    return out.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // changeset publish only tags packages it publishes in *this* run. After a partial
 // failure (one package on npm, another not), retried runs skip already-published
 // packages and never create their tags. Ensure every publishable package on
 // production has a git tag matching its package.json version.
 function ensurePackageTags() {
+  const tags = [];
   for (const pkg of publishablePackages()) {
     const tag = `${pkg.name}@${pkg.version}`;
-    if (tagExists(tag)) continue;
-    console.log(`Creating missing tag ${tag}`);
-    run(`git tag "${tag}"`);
+    if (!tagExists(tag)) {
+      console.log(`Creating missing tag ${tag}`);
+      run(`git tag -a "${tag}" -m "${tag}"`);
+    }
+    tags.push(tag);
+  }
+  return tags;
+}
+
+function pushMissingTags(tags) {
+  for (const tag of tags) {
+    if (tagExistsRemote(tag)) continue;
+    run(`git push origin "refs/tags/${tag}"`);
   }
 }
 
@@ -146,8 +166,9 @@ try {
   );
 }
 
-ensurePackageTags();
-run("git push --follow-tags origin production");
+const tags = ensurePackageTags();
+run("git push origin production");
+pushMissingTags(tags);
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 ensureGitHubReleases(ghToken);
