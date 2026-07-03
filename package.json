@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "changeset": "changeset",
+    "changeset-ai:generate": "node scripts/changeset-ai-generate.mjs",
     "build": "pnpm -r --if-present run build",
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
     "publish-canary": "gh workflow run release-publish.yml --ref master",
