@@ -130,14 +130,17 @@ Tune lockstep/independence and exclusions in `.changeset/config.json`
 
 ## Release authorization
 
-**Only admins can release.** The publish workflow is not manually triggerable:
+**Only admins can release.** Real releases still require `master → production`
+approval, with one controlled manual retry path:
 
-- **Publish** runs **only on a push to `production`** — i.e. an admin approving
-  and merging the `master → production` release PR. There is no
-  `workflow_dispatch` path to a real release.
-- **Manual dispatch** of the Publish release workflow only runs the **canary**
-  job: an ephemeral snapshot under the `@canary` dist-tag that never moves
-  `latest`, never creates tags or GitHub Releases, and never consumes changesets.
+- **Publish** runs on a push to `production` — i.e. an admin approving and
+  merging the `master → production` release PR.
+- **Manual dispatch (mode=`retry-production`)** is an admin-only retry path for
+  failed production publishes. It always checks out `production` and cannot
+  target `master` or a feature branch.
+- **Manual dispatch (mode=`canary`)** runs the **Publish canary** job: an
+  ephemeral snapshot under the `@canary` dist-tag that never moves `latest`,
+  never creates tags or GitHub Releases, and never consumes changesets.
 - `production` must only advance from `master` (the release PR). Enforce with a
   ruleset: require a PR, restrict who can push, and require admin review
   (public repo or paid plan for private repos).

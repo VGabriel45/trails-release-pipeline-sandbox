@@ -123,9 +123,9 @@ The script:
 - **Admin review gate** — protect `production` with a ruleset: require a pull
   request (no direct pushes), restrict merge to admins, and require an admin
   review (needs a public repo or a paid plan for private repos). The publish
-  job only fires on a push to `production`, so this PR gate is the single
-  release authorization point — the workflow itself cannot be dispatched into
-  a real release (manual dispatch = canary snapshot only).
+  job fires automatically on a push to `production` and also supports an
+  admin-only manual `retry-production` mode for failed runs. Manual canary
+  publishes use mode `canary` and never touch `latest`/tags/GitHub Releases.
 
 ## Secrets reference
 

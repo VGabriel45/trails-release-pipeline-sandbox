@@ -8,6 +8,13 @@ on:
   # production, i.e. an admin merging the master -> production release PR.
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Manual run mode"
+        type: choice
+        default: canary
+        options:
+          - canary
+          - retry-production
       packages:
         description: "Which package(s) to include in the canary"
         type: choice
@@ -23,19 +30,31 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-publish-${{ github.event_name == 'workflow_dispatch' && 'canary' || 'production' }}
+  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'production' }}
   cancel-in-progress: false
 
 jobs:
   publish:
     name: Publish
-    # Only a push to production (the merged master -> production release PR)
-    # can publish a real release. Never triggerable manually.
-    if: github.event_name == 'push'
+    # Real releases run on production pushes. Manual mode exists only for admin
+    # retries of a failed production publish against the current production tip.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'retry-production')
     runs-on: ubuntu-latest
     steps:
+      - name: Authorize manual production retry (admins only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PERM=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq .permission)
+          if [ "$PERM" != "admin" ]; then
+            echo "Manual production publish retry is admin-only (actor=${{ github.actor }}, permission=$PERM)."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'production' || github.ref_name }}
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
@@ -59,7 +78,7 @@ jobs:
 
   publish-canary:
     name: Publish canary
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'canary'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
