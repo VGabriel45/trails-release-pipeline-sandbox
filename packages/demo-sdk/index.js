@@ -8,7 +8,8 @@ export function greet(name = "world", { style = "default" } = {}) {
 }
 
 export function farewell(name = "world") {
-  return `Goodbye, ${name}!`;
+  const trimmed = String(name ?? "").trim();
+  return `Goodbye, ${trimmed === "" ? "world" : trimmed}!`;
 }
 
 /** Returns a short celebration string for release testing. */
