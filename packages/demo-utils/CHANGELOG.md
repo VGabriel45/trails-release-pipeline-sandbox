@@ -1,5 +1,11 @@
 # @vgabriel45/demo-utils
 
+## 0.3.0
+
+### Minor Changes
+
+- [#28](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/28) [`960b783`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/960b783467cf8722d3d80211f5f8d7c9a3af91d7) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Added `snakeCase` helper to `demo-utils` for converting text to snake_case format.
+
 ## 0.2.1
 
 ### Patch Changes

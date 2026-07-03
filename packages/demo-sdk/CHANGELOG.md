@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 1.3.1
+
+### Patch Changes
+
+- [#27](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/27) [`154cc2e`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/154cc2e769f66b40b584ff661ea7c02b8758219b) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Fixed `greetMany` to gracefully handle a single string value passed instead of an array.
+
 ## 1.3.0
 
 ### Minor Changes
