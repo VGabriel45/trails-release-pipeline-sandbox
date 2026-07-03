@@ -24,7 +24,8 @@ export function greetEmoji(name = "world", emoji = "👋", options = {}) {
 
 /** Greet several people at once, joined with a separator. */
 export function greetMany(names = [], { separator = " ", ...options } = {}) {
-  return names
+  const list = Array.isArray(names) ? names : [names];
+  return list
     .filter((name) => name != null && String(name).trim() !== "")
     .map((name) => greet(name, options))
     .join(separator);
