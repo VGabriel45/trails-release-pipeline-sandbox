@@ -3,6 +3,9 @@ name: Publish release
 on:
   push:
     branches: [production]
+  # workflow_dispatch is ONLY for canary snapshots (ephemeral, @canary dist-tag,
+  # never moves `latest`). A real release publishes exclusively via a push to
+  # production, i.e. an admin merging the master -> production release PR.
   workflow_dispatch:
     inputs:
       mode:
