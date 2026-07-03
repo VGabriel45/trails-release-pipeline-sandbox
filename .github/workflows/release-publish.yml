@@ -57,20 +57,85 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && 'production' || github.ref_name }}
           fetch-depth: 0
 
+      - name: Detect version bumps in this production push
+        id: bump-check
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node <<'NODE'
+          const { execSync } = require("node:child_process");
+          const { readFileSync, readdirSync, statSync, appendFileSync } = require("node:fs");
+          const { join } = require("node:path");
+
+          const before = process.env.BEFORE_SHA;
+          const output = process.env.GITHUB_OUTPUT;
+          const root = process.cwd();
+          const config = JSON.parse(readFileSync(join(root, ".changeset/config.json"), "utf8"));
+          const ignored = new Set(config.ignore ?? []);
+
+          let shouldPublish = false;
+          const changed = [];
+          for (const entry of readdirSync("packages")) {
+            const pkgDir = join("packages", entry);
+            if (!statSync(pkgDir).isDirectory()) continue;
+            const pkgPath = join(pkgDir, "package.json");
+            let current;
+            try {
+              current = JSON.parse(readFileSync(pkgPath, "utf8"));
+            } catch {
+              continue;
+            }
+            if (current.private === true) continue;
+            if (ignored.has(current.name)) continue;
+
+            let previous;
+            try {
+              previous = JSON.parse(execSync(`git show ${before}:${pkgPath}`, { encoding: "utf8" }));
+            } catch {
+              // New package or missing prior manifest: publish to be safe.
+              shouldPublish = true;
+              changed.push(`${current.name}: <new> -> ${current.version}`);
+              continue;
+            }
+
+            if (previous.version !== current.version) {
+              shouldPublish = true;
+              changed.push(`${current.name}: ${previous.version} -> ${current.version}`);
+            }
+          }
+
+          if (shouldPublish) {
+            console.log("Package version bumps detected:");
+            for (const line of changed) console.log(`- ${line}`);
+          } else {
+            console.log("No publishable package version bumps detected in this production push — skipping publish.");
+          }
+          appendFileSync(output, `publish=${shouldPublish}\n`);
+          NODE
+
       - uses: pnpm/action-setup@v4
+        if: steps.bump-check.outputs.publish == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.bump-check.outputs.publish == 'true'
         with:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - run: pnpm install --frozen-lockfile
+      - if: steps.bump-check.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
+        if: steps.bump-check.outputs.publish == 'true'
         run: pnpm build
 
       - name: Publish release to npm
+        if: steps.bump-check.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/publish-release.mjs
