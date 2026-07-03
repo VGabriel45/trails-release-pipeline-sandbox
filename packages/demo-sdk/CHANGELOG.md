@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 1.4.0
+
+### Minor Changes
+
+- [#30](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/30) [`4081af7`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/4081af7b1b82b38213e73c6e30496f861d351d4e) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Added `formatSlug` helper that converts display text into a URL-friendly slug.
+
 ## 1.3.1
 
 ### Patch Changes

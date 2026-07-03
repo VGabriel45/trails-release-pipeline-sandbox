@@ -54,3 +54,12 @@ export function formatInitials(name = "") {
     .map((word) => word.charAt(0))
     .join("");
 }
+
+/** Format display text into a URL-friendly slug. */
+export function formatSlug(text = "") {
+  return String(text ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
