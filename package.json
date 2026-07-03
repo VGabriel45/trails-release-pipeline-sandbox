@@ -6,7 +6,7 @@
     "changeset-ai:generate": "node scripts/changeset-ai-generate.mjs",
     "build": "pnpm -r --if-present run build",
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
-    "publish-canary": "gh workflow run release-publish.yml --ref master",
+    "publish-canary": "gh workflow run release-canary.yml --ref master",
     "publish-release": "node scripts/publish-release.mjs"
   },
   "devDependencies": {

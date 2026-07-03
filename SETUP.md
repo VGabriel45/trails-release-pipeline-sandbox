@@ -16,6 +16,7 @@ Copy these into the target repo (paths unchanged):
 .github/workflows/changeset-check.yml
 .github/workflows/release-prepare.yml
 .github/workflows/release-publish.yml
+.github/workflows/release-canary.yml
 .github/workflows/verify-app-token.yml
 scripts/ai-changeset.mjs
 scripts/changeset-check.mjs
@@ -34,7 +35,7 @@ Then merge into the target `package.json`:
   "scripts": {
     "build": "pnpm -r --if-present run build",
     "prepare-release": "gh workflow run release-prepare.yml --ref master",
-    "publish-canary": "gh workflow run release-publish.yml --ref master"
+    "publish-canary": "gh workflow run release-canary.yml --ref master"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.105.0",          // omit if using GitHub Models
