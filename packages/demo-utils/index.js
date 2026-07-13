@@ -14,7 +14,9 @@ export function clamp(value, min, max) {
   const n = Number(value);
   const lo = Number(min);
   const hi = Number(max);
-  if (Number.isNaN(n) || Number.isNaN(lo) || Number.isNaN(hi)) return lo;
+  if (!Number.isFinite(n) || !Number.isFinite(lo) || !Number.isFinite(hi)) {
+    return lo;
+  }
   return Math.min(Math.max(n, lo), hi);
 }
 
