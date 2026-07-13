@@ -127,8 +127,10 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # --ignore-scripts: keep untrusted dependency install-time code away from the
+      # OIDC-privileged runner; the build step below runs package build scripts explicitly.
       - if: steps.bump-check.outputs.publish == 'true'
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build packages
         if: steps.bump-check.outputs.publish == 'true'
@@ -161,7 +163,9 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - run: pnpm install --frozen-lockfile
+      # --ignore-scripts: keep untrusted dependency install-time code away from the
+      # OIDC-privileged runner; the build step below runs package build scripts explicitly.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build packages
         run: pnpm build
