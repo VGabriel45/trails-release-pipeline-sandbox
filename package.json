@@ -10,7 +10,8 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0"
+    "@changesets/cli": "^2.31.0",
+    "js-yaml": "^5.2.1"
   },
   "packageManager": "pnpm@9.15.0"
 }

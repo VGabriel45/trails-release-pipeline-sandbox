@@ -4,8 +4,10 @@ import { join } from "node:path";
 import {
   filterChangesetsByPackage,
   parsePackageSelection,
+  parseChangesetFile,
   packagesInPendingChangesets,
   restoreHeldChangesets,
+  serializeChangeset,
 } from "./lib/filter-changesets.mjs";
 import {
   assertIgnoredPackagesArePrivate,
@@ -97,10 +99,29 @@ function publishablePackages() {
   return getPublishablePackageEntries();
 }
 
-function enforceSelectionBoundary(released, selectionRaw) {
+// Map of package name -> current master version, captured before this run's
+// `changeset version` so we can tell what THIS run actually bumped.
+function currentVersions() {
+  return new Map(publishablePackages().map((p) => [p.name, p.version]));
+}
+
+// Packages whose version changed during this run (compared to the snapshot
+// taken before `changeset version`). This is the true "what this run bumped"
+// set — unlike releasedPackages(), which reports cumulative master-vs-production
+// drift and so includes bumps from earlier prepare runs whose PR hasn't merged.
+function bumpedThisRun(versionsBefore) {
+  return publishablePackages()
+    .filter((p) => versionsBefore.get(p.name) !== p.version)
+    .map((p) => ({ name: p.name, version: p.version }));
+}
+
+// Guard against changesets silently widening a selective release (dependency or
+// fixed/linked-group expansion). Checks ONLY what this run bumped against the
+// admin's explicit selection; "all" selections are unconstrained by design.
+function enforceSelectionBoundary(bumped, selectionRaw) {
   const selected = parsePackageSelection(selectionRaw ?? "all");
   if (!selected) return;
-  const unexpected = released.filter((pkg) => !selected.has(pkg.name));
+  const unexpected = bumped.filter((pkg) => !selected.has(pkg.name));
   if (unexpected.length === 0) return;
   throw new Error(
     `Selective release exceeded requested packages. Requested: ${[...selected].join(", ")}. Expanded to include: ${unexpected
@@ -128,22 +149,16 @@ function capPre1MajorBumps() {
     if (!file.endsWith(".md")) continue;
     const path = join(".changeset", file);
     const raw = readFileSync(path, "utf8");
-    const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n[\s\S]*)?$/);
-    if (!match) continue;
-    const frontmatter = match[1];
-    const suffix = match[2] ?? "\n";
-    const updatedFrontmatter = frontmatter.replace(
-      /^("[^"]+"|[^\s:]+):[ \t]*major[ \t]*$/gim,
-      (line, nameToken) => {
-        const name = nameToken.replace(/"/g, "");
-        if (majorByName.get(name) === 0) {
-          capped = true;
-          return `${nameToken}: minor`;
-        }
-        return line;
-      },
-    );
-    const updated = `---\n${updatedFrontmatter}\n---${suffix}`;
+    const parsed = parseChangesetFile(raw);
+    if (!parsed) continue;
+    const updatedPackages = parsed.packages.map((pkg) => {
+      if (pkg.bump === "major" && majorByName.get(pkg.name) === 0) {
+        capped = true;
+        return { ...pkg, bump: "minor" };
+      }
+      return pkg;
+    });
+    const updated = serializeChangeset(updatedPackages, parsed.body);
     if (updated !== raw) writeFileSync(path, updated);
   }
 
@@ -261,6 +276,7 @@ if (hasPendingChangesets()) {
 let released;
 
 if (hasPendingChangesets() && !selectionAlreadyConsumed) {
+  const versionsBefore = currentVersions();
   capPre1MajorBumps();
 
   console.log("Pending changesets found — running changeset version…");
@@ -270,8 +286,11 @@ if (hasPendingChangesets() && !selectionAlreadyConsumed) {
     restoreHeldChangesets();
   }
 
+  // Boundary check uses THIS run's actual version delta, not master-vs-production
+  // (which would count still-unmerged bumps from earlier prepare runs).
+  enforceSelectionBoundary(bumpedThisRun(versionsBefore), process.env.RELEASE_PACKAGES);
+
   released = releasedPackages();
-  enforceSelectionBoundary(released, process.env.RELEASE_PACKAGES);
   if (released.length === 0) {
     throw new Error("changeset version ran but no package versions changed.");
   }
@@ -284,8 +303,9 @@ if (hasPendingChangesets() && !selectionAlreadyConsumed) {
   runFile("git", ["commit", "-m", commitMessage(released)]);
   run("git push origin master");
 } else if (masterAheadOfProduction()) {
+  // No versioning happened this run (changesets already consumed), so there is
+  // no per-run delta to bound — the divergence is whatever earlier runs staged.
   released = releasedPackages();
-  enforceSelectionBoundary(released, process.env.RELEASE_PACKAGES);
   if (released.length === 0) {
     console.error(
       "Master is ahead of production but no publishable package versions differ.",
