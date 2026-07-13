@@ -41,7 +41,9 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # --ignore-scripts: prepare only needs the Changesets CLI; blocking dependency
+      # lifecycle scripts keeps untrusted install-time code away from the App token.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Prepare release
         env:

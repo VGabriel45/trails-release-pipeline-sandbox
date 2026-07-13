@@ -4,6 +4,25 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
+// package.json fields flow into git/gh/npm invocations in the release scripts.
+// Reject anything outside the strict npm name / semver grammar so repo content
+// can never smuggle shell metacharacters or option-like strings into commands.
+const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+export function assertSafePackageMetadata(name, version, source) {
+  if (typeof name !== "string" || !NPM_NAME_RE.test(name)) {
+    throw new Error(
+      `Refusing to release: invalid package name in ${source}: ${JSON.stringify(name)}`,
+    );
+  }
+  if (typeof version !== "string" || !SEMVER_RE.test(version)) {
+    throw new Error(
+      `Refusing to release: invalid package version in ${source}: ${JSON.stringify(version)}`,
+    );
+  }
+}
+
 /** @returns {Set<string>} package names from .changeset/config.json ignore list */
 export function getIgnoredPackages() {
   const config = JSON.parse(
@@ -22,14 +41,18 @@ export function getPublishablePackageEntries() {
     const dir = join(packagesDir, entry);
     if (!statSync(dir).isDirectory()) continue;
     const pkgPath = join(dir, "package.json");
+    let pkg;
     try {
-      const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-      if (pkg.private === true) continue;
-      if (ignored.has(pkg.name)) continue;
-      out.push({ dir: join("packages", entry), name: pkg.name, version: pkg.version });
+      pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
     } catch {
       // ignore dirs without a valid package.json
+      continue;
     }
+    if (pkg.private === true) continue;
+    if (ignored.has(pkg.name)) continue;
+    // Must throw (not be skipped) so a malformed manifest halts the release.
+    assertSafePackageMetadata(pkg.name, pkg.version, join("packages", entry, "package.json"));
+    out.push({ dir: join("packages", entry), name: pkg.name, version: pkg.version });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }

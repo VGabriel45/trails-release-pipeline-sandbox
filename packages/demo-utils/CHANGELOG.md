@@ -1,5 +1,11 @@
 # @vgabriel45/demo-utils
 
+## 0.4.0
+
+### Minor Changes
+
+- [#47](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/47) [`f8945ba`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/f8945ba4c89f825cd3d79ceb8d36d04884041b5a) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Add `capitalize` helper for uppercasing the first character of text.
+
 ## 0.3.2
 
 ### Patch Changes

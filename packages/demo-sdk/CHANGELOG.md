@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 2.4.0
+
+### Minor Changes
+
+- [#46](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/46) [`06ed93e`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/06ed93e8da1e1b245057e2a10b3294cdb4dc84fb) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Add `welcomeBanner` helper for multi-line onboarding greetings.
+
 ## 2.3.0
 
 ### Minor Changes

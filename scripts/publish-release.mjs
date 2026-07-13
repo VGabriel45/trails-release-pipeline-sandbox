@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import {
   existsSync,
   readFileSync,
@@ -15,17 +15,46 @@ function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 }
 
-function execOut(cmd, env = process.env) {
-  return execSync(cmd, { encoding: "utf8", env: { ...process.env, ...env } }).trim();
+// Shell-free variants for commands that carry repo-controlled data (package
+// names/versions). Arguments are passed as an argv array, so shell
+// metacharacters in the data are inert.
+function runFile(cmd, args, env = process.env) {
+  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
+}
+
+function execFileOut(cmd, args, env = process.env) {
+  return execFileSync(cmd, args, {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  }).trim();
 }
 
 function publishablePackages() {
   return getPublishablePackageEntries();
 }
 
+// Confirm a specific name@version is actually live on the npm registry. Tags
+// and GitHub releases must reflect what published, not merely what the
+// manifests claim. `changeset publish` is per-package and can partially fail
+// (one package publishes, another doesn't); its failure is caught below, so we
+// re-derive the published set from the registry itself. A few retries absorb
+// brief read-path propagation lag after a successful publish.
+function isPublishedOnNpm(pkg, attempts = 3) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const out = execFileOut("npm", ["view", `${pkg.name}@${pkg.version}`, "version"]);
+      if (out === pkg.version) return true;
+    } catch {
+      // Not on the registry yet (or not at all).
+    }
+    if (attempt < attempts) run(`sleep ${attempt * 2}`);
+  }
+  return false;
+}
+
 function tagExists(tag) {
   try {
-    execOut(`git rev-parse "refs/tags/${tag}^{}"`);
+    execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
     return true;
   } catch {
     return false;
@@ -34,24 +63,25 @@ function tagExists(tag) {
 
 function tagExistsRemote(tag) {
   try {
-    const out = execOut(`git ls-remote --tags origin "refs/tags/${tag}"`);
+    const out = execFileOut("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
     return out.length > 0;
   } catch {
     return false;
   }
 }
 
-// changeset publish only tags packages it publishes in *this* run. After a partial
-// failure (one package on npm, another not), retried runs skip already-published
-// packages and never create their tags. Ensure every publishable package on
-// production has a git tag matching its package.json version.
-function ensurePackageTags() {
+// Tag only the given packages (the set confirmed live on npm). Tagging a
+// version that never published would burn the tag: a later retry-production
+// run skips packages whose tag already exists, so the version could never be
+// republished. Keeping tags in lockstep with npm lets retries heal a partial
+// publish.
+function ensurePackageTags(pkgs) {
   const tags = [];
-  for (const pkg of publishablePackages()) {
+  for (const pkg of pkgs) {
     const tag = `${pkg.name}@${pkg.version}`;
     if (!tagExists(tag)) {
       console.log(`Creating missing tag ${tag}`);
-      run(`git tag -a "${tag}" -m "${tag}"`);
+      runFile("git", ["tag", "-a", tag, "-m", tag]);
     }
     tags.push(tag);
   }
@@ -61,15 +91,15 @@ function ensurePackageTags() {
 function pushMissingTags(tags) {
   for (const tag of tags) {
     if (tagExistsRemote(tag)) continue;
-    run(`git push origin "refs/tags/${tag}"`);
+    runFile("git", ["push", "origin", `refs/tags/${tag}`]);
   }
 }
 
-function ensureGitHubReleases(ghToken) {
-  for (const pkg of publishablePackages()) {
+function ensureGitHubReleases(pkgs, ghToken) {
+  for (const pkg of pkgs) {
     const tag = `${pkg.name}@${pkg.version}`;
     try {
-      execSync(`gh release view "${tag}"`, {
+      execFileSync("gh", ["release", "view", tag], {
         stdio: "pipe",
         env: { ...process.env, GH_TOKEN: ghToken },
       });
@@ -82,12 +112,15 @@ function ensureGitHubReleases(ghToken) {
     if (notes) {
       const notesFile = join(tmpdir(), `release-notes-${pkg.name.replace(/[^\w.-]+/g, "-")}-${pkg.version}.md`);
       writeFileSync(notesFile, `${notes}\n`);
-      run(
-        `gh release create "${tag}" --title "${tag}" --notes-file "${notesFile}"`,
+      runFile(
+        "gh",
+        ["release", "create", tag, "--title", tag, "--notes-file", notesFile],
         { GH_TOKEN: ghToken },
       );
     } else {
-      run(`gh release create "${tag}" --generate-notes`, { GH_TOKEN: ghToken });
+      runFile("gh", ["release", "create", tag, "--generate-notes"], {
+        GH_TOKEN: ghToken,
+      });
     }
   }
 }
@@ -134,22 +167,26 @@ function configureGitBot() {
   if (slug) {
     let userId = "";
     try {
-      userId = execOut(`gh api "/users/${slug}[bot]" --jq .id`);
+      userId = execFileOut("gh", ["api", `/users/${slug}[bot]`, "--jq", ".id"]);
     } catch {
       // fall through to github-actions[bot]
     }
     if (userId) {
-      run(`git config user.name "${slug}[bot]"`);
-      run(
-        `git config user.email "${userId}+${slug}[bot]@users.noreply.github.com"`,
-      );
+      runFile("git", ["config", "user.name", `${slug}[bot]`]);
+      runFile("git", [
+        "config",
+        "user.email",
+        `${userId}+${slug}[bot]@users.noreply.github.com`,
+      ]);
       return;
     }
   }
-  run('git config user.name "github-actions[bot]"');
-  run(
-    'git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-  );
+  runFile("git", ["config", "user.name", "github-actions[bot]"]);
+  runFile("git", [
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com",
+  ]);
 }
 
 configureGitBot();
@@ -162,19 +199,38 @@ try {
 } catch {
   publishFailed = true;
   console.warn(
-    "changeset publish reported errors — continuing to sync tags and GitHub releases…",
+    "changeset publish reported errors — verifying which versions actually reached npm…",
   );
 }
 
-const tags = ensurePackageTags();
+// Derive the released set from the registry, not the manifests, so a partial
+// publish never produces tags/releases for versions that didn't ship.
+const allPublishable = publishablePackages();
+const published = allPublishable.filter((pkg) => isPublishedOnNpm(pkg));
+const unpublished = allPublishable.filter((pkg) => !published.includes(pkg));
+
+const tags = ensurePackageTags(published);
 run("git push origin production");
 pushMissingTags(tags);
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-ensureGitHubReleases(ghToken);
+ensureGitHubReleases(published, ghToken);
+
+if (unpublished.length > 0) {
+  publishFailed = true;
+  console.error(
+    "The following package versions are NOT on npm; no tags or releases were created for them:",
+  );
+  for (const pkg of unpublished) {
+    console.error(`- ${pkg.name}@${pkg.version}`);
+  }
+  console.error(
+    "Re-run Publish release (retry-production) once the cause is fixed to publish and tag them.",
+  );
+}
 
 if (publishFailed) {
-  console.error("Publish finished with npm errors (tags/releases synced where possible).");
+  console.error("Publish finished with npm errors (tags/releases synced for published versions only).");
   process.exit(1);
 }
 

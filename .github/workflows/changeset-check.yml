@@ -20,7 +20,9 @@ jobs:
           node-version: 24
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # --ignore-scripts: this check only needs the Changesets CLI; no dependency
+      # lifecycle scripts are required to validate changesets.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - run: git fetch origin master
 

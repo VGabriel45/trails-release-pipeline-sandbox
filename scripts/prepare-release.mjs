@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -7,14 +7,26 @@ import {
 } from "./lib/filter-changesets.mjs";
 import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
-const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 }
 
 function execOut(cmd, env = process.env) {
   return execSync(cmd, {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  }).trim();
+}
+
+// Shell-free variants for commands that carry repo-controlled data (package
+// names/versions, PR titles/bodies). Argv arrays never pass through a shell,
+// so metacharacters in the data are inert.
+function runFile(cmd, args, env = process.env) {
+  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
+}
+
+function execFileOut(cmd, args, env = process.env) {
+  return execFileSync(cmd, args, {
     encoding: "utf8",
     env: { ...process.env, ...env },
   }).trim();
@@ -43,7 +55,7 @@ function shortName(name) {
 // Version of a package on origin/production (null if it isn't there yet).
 function productionVersion(pkgDir) {
   try {
-    const raw = execOut(`git show origin/production:${pkgDir}/package.json`);
+    const raw = execFileOut("git", ["show", `origin/production:${pkgDir}/package.json`]);
     return JSON.parse(raw).version;
   } catch {
     return null;
@@ -140,22 +152,26 @@ function configureGitBot() {
   if (slug) {
     let userId = "";
     try {
-      userId = execOut(`gh api "/users/${slug}[bot]" --jq .id`);
+      userId = execFileOut("gh", ["api", `/users/${slug}[bot]`, "--jq", ".id"]);
     } catch {
       // fall through to github-actions[bot]
     }
     if (userId) {
-      run(`git config user.name "${slug}[bot]"`);
-      run(
-        `git config user.email "${userId}+${slug}[bot]@users.noreply.github.com"`,
-      );
+      runFile("git", ["config", "user.name", `${slug}[bot]`]);
+      runFile("git", [
+        "config",
+        "user.email",
+        `${userId}+${slug}[bot]@users.noreply.github.com`,
+      ]);
       return;
     }
   }
-  run('git config user.name "github-actions[bot]"');
-  run(
-    'git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-  );
+  runFile("git", ["config", "user.name", "github-actions[bot]"]);
+  runFile("git", [
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com",
+  ]);
 }
 
 function openReleasePr(title, body, ghToken) {
@@ -171,8 +187,9 @@ function openReleasePr(title, body, ghToken) {
     return existing;
   }
 
-  const prUrl = execOut(
-    `gh pr create --base production --head master --title ${JSON.stringify(title)} --body ${JSON.stringify(body)}`,
+  const prUrl = execFileOut(
+    "gh",
+    ["pr", "create", "--base", "production", "--head", "master", "--title", title, "--body", body],
     env,
   );
 
@@ -192,11 +209,18 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
-try {
-  filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
-} catch (err) {
-  console.error(err.message);
-  process.exit(1);
+// Only filter when changesets actually exist. When none remain — because a
+// prior prepare run already consumed them, or an admin bumped a package.json
+// version by hand — skip filtering and fall through to the
+// masterAheadOfProduction() branch instead of throwing "No pending changesets
+// found." (filterChangesetsByPackage throws on an empty set).
+if (hasPendingChangesets()) {
+  try {
+    filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
 }
 
 let released;
@@ -221,7 +245,7 @@ if (hasPendingChangesets()) {
 
   configureGitBot();
   run("git add -A");
-  run(`git commit -m ${JSON.stringify(commitMessage(released))}`);
+  runFile("git", ["commit", "-m", commitMessage(released)]);
   run("git push origin master");
 } else if (masterAheadOfProduction()) {
   released = releasedPackages();
