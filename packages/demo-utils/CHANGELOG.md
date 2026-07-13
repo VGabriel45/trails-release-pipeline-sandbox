@@ -1,5 +1,11 @@
 # @vgabriel45/demo-utils
 
+## 0.3.2
+
+### Patch Changes
+
+- [#38](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/38) [`7a6d3f2`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/7a6d3f282341f8092dd54b0b5a9a1800fb33ee4b) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Handle non-finite inputs in `clamp()` by safely returning the lower bound.
+
 ## 0.3.1
 
 ### Patch Changes
