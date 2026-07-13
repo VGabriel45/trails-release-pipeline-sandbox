@@ -68,3 +68,9 @@ export function formatSlug(text = "") {
 export function getDemoSdkMarker() {
   return "demo-sdk-change";
 }
+
+/** Build a friendly greeting for UI headers. */
+export function greetDisplayName(name = "") {
+  const displayName = formatName(name);
+  return greet(displayName || "world");
+}
