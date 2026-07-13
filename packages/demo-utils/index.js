@@ -39,3 +39,10 @@ export function snakeCase(text = "") {
     .replace(/^_+|_+$/g, "");
   return snake || "untitled";
 }
+
+/** Capitalize the first character of the trimmed text. */
+export function capitalize(text = "") {
+  const input = String(text ?? "").trim();
+  if (input === "") return "";
+  return input.charAt(0).toUpperCase() + input.slice(1);
+}
