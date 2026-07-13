@@ -58,8 +58,8 @@ This pipeline assumes two branches:
 GitHub Actions trigger filters can't read env vars, so these names are fixed in
 the workflow `on:`/`ref:` fields. If your repo uses different names (e.g.
 `main`), rename them in: `changeset-check.yml` (`branches:`), `release-prepare.yml`
-(`ref:` + the script's branch refs), and `release-publish.yml` (`branches:` +
-canary job `ref: master`).
+(`ref:` + the script's branch refs), `release-publish.yml` (`branches:` +
+canary job `ref: master`), and `release-canary.yml` (dispatch `--ref master`).
 
 ## Monorepo
 
@@ -67,15 +67,19 @@ Works out of the box for any number of packages under `packages/*`. Each
 package versions independently; the prepare step caps pre-1.0 bumps per package,
 writes per-package changelogs, and lists every changed package in the release PR
 title. Configure lockstep/exclusions in `.changeset/config.json` (`linked`,
-`fixed`, `ignore`, `updateInternalDependencies`). List npm names in **`ignore`**
-to skip changesets, version bumps, and publish for packages under `packages/`
-(e.g. demos or internal apps). `"private": true` packages are already excluded.
+`fixed`, `ignore`, `updateInternalDependencies`). `"private": true` packages are
+excluded from release/publish. Keep `.changeset/config.json` `ignore` only for
+`private: true` packages; ignored public packages are rejected by this pipeline
+to avoid publish/reconciliation drift.
 
 **Selective release:** **Prepare release** and canary publish expose a
 **packages** dropdown (default: **All modified packages**). Choosing one package
 filters changesets before versioning; unselected changesets are held and restored
-on `master` after `changeset version`. Add new npm names to the `packages` choice
-list in `release-prepare.yml` and `release-publish.yml` when the monorepo grows.
+on `master` after `changeset version`. Selective mode is strict: if Changesets
+would widen to extra packages (dependency/fixed-group propagation), the run
+fails and prints the expanded package list so admins can re-run with an explicit
+set (or all modified packages). Add new npm names to the `packages` choice list
+in `release-prepare.yml` and `release-publish.yml` when the monorepo grows.
 
 For canary: if there are no pending changesets, the runner creates a temporary
 synthetic snapshot changeset so canary can still publish for changed packages.

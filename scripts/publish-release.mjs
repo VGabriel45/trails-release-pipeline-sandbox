@@ -1,6 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
 import {
-  existsSync,
   readFileSync,
   readdirSync,
   statSync,
@@ -9,7 +8,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
-import { getPublishablePackageEntries } from "./lib/packages.mjs";
+import {
+  assertIgnoredPackagesArePrivate,
+  assertPublishRegistryPinnedToNpm,
+  getPublishablePackageEntries,
+  NPM_REGISTRY_URL,
+} from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -33,40 +37,72 @@ function publishablePackages() {
   return getPublishablePackageEntries();
 }
 
-// Confirm a specific name@version is actually live on the npm registry. Tags
-// and GitHub releases must reflect what published, not merely what the
-// manifests claim. `changeset publish` is per-package and can partially fail
-// (one package publishes, another doesn't); its failure is caught below, so we
-// re-derive the published set from the registry itself. A few retries absorb
-// brief read-path propagation lag after a successful publish.
-function isPublishedOnNpm(pkg, attempts = 3) {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+// How long (and how often) the fallback registry check polls before giving up.
+// npm's read path is eventually consistent and can lag several minutes behind a
+// successful publish, so we poll rather than check once.
+const NPM_VIEW_POLL_INTERVAL_MS = 30_000;
+const NPM_VIEW_POLL_TIMEOUT_MS = 5 * 60_000;
+
+// Fallback confirmation for versions that were NOT freshly published in this
+// run (e.g. a retry-production run where `changeset publish` skipped a version
+// that a prior run already pushed to npm). Freshly published versions
+// deliberately bypass this check (see below): npm's read-after-write
+// propagation lag makes `npm view` 404 for minutes after a successful publish,
+// so using it as the success gate would produce false negatives. For the
+// fallback path we poll every 30s for up to 5 minutes to absorb that lag.
+function isPublishedOnNpm(
+  pkg,
+  { intervalMs = NPM_VIEW_POLL_INTERVAL_MS, timeoutMs = NPM_VIEW_POLL_TIMEOUT_MS } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  const intervalSeconds = Math.max(1, Math.round(intervalMs / 1000));
+  let attempt = 0;
+  for (;;) {
+    attempt++;
     try {
-      const out = execFileOut("npm", ["view", `${pkg.name}@${pkg.version}`, "version"]);
+      const out = execFileOut("npm", [
+        "view",
+        `${pkg.name}@${pkg.version}`,
+        "version",
+        "--registry",
+        NPM_REGISTRY_URL,
+      ]);
       if (out === pkg.version) return true;
     } catch {
-      // Not on the registry yet (or not at all).
+      // Not visible on the registry read path yet (or not published at all).
     }
-    if (attempt < attempts) run(`sleep ${attempt * 2}`);
-  }
-  return false;
-}
-
-function tagExists(tag) {
-  try {
-    execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
-    return true;
-  } catch {
-    return false;
+    if (Date.now() + intervalMs > deadline) return false;
+    console.log(
+      `npm has not surfaced ${pkg.name}@${pkg.version} yet (attempt ${attempt}); re-checking in ${intervalSeconds}s…`,
+    );
+    run(`sleep ${intervalSeconds}`);
   }
 }
 
-function tagExistsRemote(tag) {
+function headCommit() {
+  return execFileOut("git", ["rev-parse", "HEAD"]);
+}
+
+function localTagCommit(tag) {
   try {
-    const out = execFileOut("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
-    return out.length > 0;
+    return execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
   } catch {
-    return false;
+    return null;
+  }
+}
+
+function remoteTagCommit(tag) {
+  try {
+    const out = execFileOut("git", [
+      "ls-remote",
+      "--tags",
+      "origin",
+      `refs/tags/${tag}^{}`,
+    ]);
+    if (out.length === 0) return null;
+    return out.split(/\s+/)[0];
+  } catch {
+    return null;
   }
 }
 
@@ -75,22 +111,35 @@ function tagExistsRemote(tag) {
 // run skips packages whose tag already exists, so the version could never be
 // republished. Keeping tags in lockstep with npm lets retries heal a partial
 // publish.
-function ensurePackageTags(pkgs) {
+function ensurePackageTags(pkgs, expectedCommit) {
   const tags = [];
   for (const pkg of pkgs) {
     const tag = `${pkg.name}@${pkg.version}`;
-    if (!tagExists(tag)) {
+    const existingCommit = localTagCommit(tag);
+    if (!existingCommit) {
       console.log(`Creating missing tag ${tag}`);
       runFile("git", ["tag", "-a", tag, "-m", tag]);
+    } else if (existingCommit !== expectedCommit) {
+      throw new Error(
+        `Existing local tag ${tag} points at ${existingCommit}, expected ${expectedCommit}. Refusing to continue.`,
+      );
     }
     tags.push(tag);
   }
   return tags;
 }
 
-function pushMissingTags(tags) {
+function pushMissingTags(tags, expectedCommit) {
   for (const tag of tags) {
-    if (tagExistsRemote(tag)) continue;
+    const existingCommit = remoteTagCommit(tag);
+    if (existingCommit) {
+      if (existingCommit !== expectedCommit) {
+        throw new Error(
+          `Remote tag ${tag} points at ${existingCommit}, expected ${expectedCommit}. Refusing to continue.`,
+        );
+      }
+      continue;
+    }
     runFile("git", ["push", "origin", `refs/tags/${tag}`]);
   }
 }
@@ -191,27 +240,46 @@ function configureGitBot() {
 
 configureGitBot();
 
+assertIgnoredPackagesArePrivate();
+
 ensureNpmAuth();
 
+const allPublishable = publishablePackages();
+assertPublishRegistryPinnedToNpm(allPublishable);
+
+// Capture publish output for observability/debugging. Release truth comes from
+// npmjs registry verification below, not from stdout parsing.
 let publishFailed = false;
+let publishOutput = "";
 try {
-  run("pnpm exec changeset publish");
-} catch {
+  publishOutput = execSync("pnpm exec changeset publish", {
+    encoding: "utf8",
+    env: { ...process.env, npm_config_registry: NPM_REGISTRY_URL },
+  });
+} catch (err) {
   publishFailed = true;
+  publishOutput = `${err.stdout ?? ""}${err.stderr ?? ""}`;
   console.warn(
-    "changeset publish reported errors — verifying which versions actually reached npm…",
+    "changeset publish reported errors — reconciling which versions actually reached npm…",
   );
 }
+process.stdout.write(publishOutput.endsWith("\n") ? publishOutput : `${publishOutput}\n`);
 
-// Derive the released set from the registry, not the manifests, so a partial
-// publish never produces tags/releases for versions that didn't ship.
-const allPublishable = publishablePackages();
-const published = allPublishable.filter((pkg) => isPublishedOnNpm(pkg));
-const unpublished = allPublishable.filter((pkg) => !published.includes(pkg));
+// Derive the released set from the canonical npmjs registry only. This avoids
+// trusting tool stdout for publish success and avoids registry redirection.
+const published = [];
+const unpublished = [];
+for (const pkg of allPublishable) {
+  if (isPublishedOnNpm(pkg)) {
+    published.push(pkg);
+  } else {
+    unpublished.push(pkg);
+  }
+}
 
-const tags = ensurePackageTags(published);
-run("git push origin production");
-pushMissingTags(tags);
+const expectedCommit = headCommit();
+const tags = ensurePackageTags(published, expectedCommit);
+pushMissingTags(tags, expectedCommit);
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 ensureGitHubReleases(published, ghToken);

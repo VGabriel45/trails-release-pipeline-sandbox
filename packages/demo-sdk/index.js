@@ -82,7 +82,7 @@ export function greetWithPrefix(prefix = "Welcome ...", name = "world", options 
 }
 
 /** Build a multi-line welcome banner for onboarding screens. */
-export function welcomeBanner(name = "world", { title = "Welcome" } = {}) {
+export function welcomeBanner(name = "world", { title = "Welcomee" } = {}) {
   const heading = String(title ?? "").trim() || "Welcome";
   return `${heading}\n${greet(name)}`;
 }

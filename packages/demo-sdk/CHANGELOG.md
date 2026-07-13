@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 2.4.1
+
+### Patch Changes
+
+- [#52](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/52) [`aa18fb1`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/aa18fb15e95c50ef044c023a064d10d7167bcfdd) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Fix in demo sdk
+
 ## 2.4.0
 
 ### Minor Changes
