@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import {
   filterChangesetsByPackage,
@@ -10,14 +10,6 @@ import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
-}
-
-function execOut(cmd, env = process.env) {
-  return execSync(cmd, {
-    encoding: "utf8",
-    stdio: "pipe",
-    env: { ...process.env, ...env },
-  }).trim();
 }
 
 function hasPendingChangesets() {
@@ -34,7 +26,11 @@ function hasPendingChangesets() {
 
 function canaryVersion(pkgName) {
   try {
-    const tags = JSON.parse(execOut(`npm view ${JSON.stringify(pkgName)} dist-tags --json`));
+    // argv array — no shell, so metacharacters in pkgName are inert.
+    const out = execFileSync("npm", ["view", pkgName, "dist-tags", "--json"], {
+      encoding: "utf8",
+    }).trim();
+    const tags = JSON.parse(out);
     return tags?.canary ?? null;
   } catch {
     return null;
