@@ -1,14 +1,14 @@
-# trails-release-pipeline-sandbox
+# Release Pipeline Overview
 
-Personal sandbox for testing the Trails SDK release pipeline before rolling it out to `0xsequence/trails`.
+This pipeline automates versioning and publishing for a multi-package app, with admin-controlled production releases and optional canary snapshots.
 
-## What's here
+## How it works
 
-- **`trails-sdk-release-bot`** GitHub App (App ID `4181013`) — commits AI changesets and runs prepare-release
-- **Changesets** with a portable `@changesets/changelog-github` wrapper (`.changeset/changelog.cjs`)
-- **Workflows:** AI changeset generation, changeset check, prepare, publish, canary (dedicated + safety-net)
-- **`@vgabriel45/demo-sdk`** and **`@vgabriel45/demo-utils`** — two publishable
-  packages so monorepo behavior (independent versions) is exercised end-to-end
+1. A developer opens a PR targeting `master`.
+2. CI checks release intent: PRs that touch publishable packages must include a manual `.changeset/*.md`, unless explicitly marked `[skip-changeset]`/`skip-changeset`.
+3. The PR is reviewed and merged into `master`.
+4. **Prepare release** computes version bumps and opens/updates `master -> production`.
+5. Admin merges `master -> production`, and that push triggers **Publish release**.
 
 > **Reusing this on another repo?** The workflows/scripts are drop-in (no
 > hardcoded owner/repo/bot values). See [`SETUP.md`](./SETUP.md) and
@@ -16,7 +16,7 @@ Personal sandbox for testing the Trails SDK release pipeline before rolling it o
 
 ## Secrets (repo)
 
-| Secret | Purpose |
+| Secret | Purpose |.
 | --- | --- |
 | `TRAILS_SDK_RELEASE_BOT_APP_ID` | GitHub App ID |
 | `TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY` | App private key (PEM) |
@@ -83,66 +83,49 @@ Add npm package names to the **`ignore`** array in `.changeset/config.json`:
 }
 ```
 
-Ignored packages are excluded from AI changeset generation, `changeset-check`,
-prepare, and publish. PRs that only touch ignored packages need no bump token
-and get no changeset. Use this for demos, examples, or internal tooling that
-lives under `packages/` but should not ship to npm.
+## CI/CD pieces
 
-Packages with `"private": true` in `package.json` are excluded automatically —
-`ignore` is for folders that are public on disk but outside the release pipeline.
+- **GitHub App**: acts as release bot for workflow commits/automation.
+- **changeset-check**: validates release intent per PR.
+- **release-prepare**: bumps versions, updates changelogs, opens release PR.
+- **release-publish**: publishes to npm on `production` push; supports admin retry mode.
+- **release-canary**: manual canary snapshots (`@canary`) without affecting `latest`.
 
-## Monorepo
+## How to use
 
-Each package versions **independently** — a release can bump `demo-sdk` to
-`1.1.0` and `demo-utils` to `0.2.0` at the same time. The prepare step:
+- **Normal release**
+  - Merge feature/fix PRs into `master`.
+  - Run **Prepare release**.
+  - Review and merge `master -> production`.
+  - Publish runs automatically on `production`.
 
-- bumps each package per its own changesets and writes each package's own
-  `CHANGELOG.md`;
-- applies the pre-1.0 cap **per package** (only `0.x` packages are capped);
-- titles the release PR with every changed package, e.g.
-  `Release: demo-sdk@1.1.0, demo-utils@0.2.0`.
+- **Canary release**
+  - Run **Publish canary release**.
+  - Select package scope (`All modified packages` or a specific package).
+  - Publishes snapshot versions under `@canary`.
 
-Publish then creates one git tag + one GitHub Release **per package**.
+- **Retry failed production publish**
+  - Run **Publish release** with `mode=retry-production` (admin-only).
 
-### Selective release (`packages`)
+## Changeset behavior
 
-When several packages have pending changesets, **Prepare release** and canary
-publish expose a **packages** dropdown (default: **All modified packages**).
-Choosing a single package filters changesets before `changeset version`; held
-changesets for other packages are restored on `master` so they can ship in a
-later release.
+- **Required gate for publishable changes**: if a PR changes publishable packages, you must provide one of:
+  - a manual `.changeset/*.md` file committed in the PR
+  - `skip-changeset` label or `[skip-changeset]` for internal-only changes
+- **Failure mode**: if none of the above is present, `changeset-check` fails.
+- **Skip mode**: use `skip-changeset` label or `[skip-changeset]` for internal-only PRs.
+- **Selective release**: workflows support package filtering via `packages` input.
 
-```
-gh workflow run release-prepare.yml --ref master \
-  -f packages="@vgabriel45/demo-sdk"
-```
+### Pre-1.0 versioning rule (`0.x`)
 
-GitHub Actions `choice` options are static — add new packages to
-`release-prepare.yml` and `release-publish.yml` when the monorepo grows.
+For packages still on `0.x`, this pipeline does not fully apply strict semver majors when versioning from changesets:
 
-Tune lockstep/independence and exclusions in `.changeset/config.json`
-(`linked`, `fixed`, `ignore`, `updateInternalDependencies`).
+- `patch` -> patch bump (`0.2.0` -> `0.2.1`)
+- `minor` -> minor bump (`0.2.0` -> `0.3.0`)
+- `major` -> treated like minor (`0.2.0` -> `0.3.0`, not `1.0.0`)
 
-## Branches
+## Security model
 
-- `master` — integration + version source of truth
-- `production` — released snapshot; merge triggers publish
-
-## Release authorization
-
-**Only admins can release.** Real releases still require `master → production`
-approval, with one controlled manual retry path:
-
-- **Publish** runs on a push to `production` — i.e. an admin approving and
-  merging the `master → production` release PR.
-- **Manual dispatch (mode=`retry-production`)** is an admin-only retry path for
-  failed production publishes. It always checks out `production` and cannot
-  target `master` or a feature branch.
-- **Manual dispatch (mode=`canary`)** runs the **Publish canary** job: an
-  ephemeral snapshot under the `@canary` dist-tag that never moves `latest`,
-  never creates tags or GitHub Releases, and never consumes changesets.
-- `production` must only advance from `master` (the release PR). Enforce with a
-  ruleset: require a PR, restrict who can push, and require admin review
-  (public repo or paid plan for private repos).
-- Admins who are npm package owners can still `npm publish` from their machine
-  if ever needed; nobody else has a publish path.
+- **OIDC-only npm publish**: no long-lived npm token required.
+- **Admin-gated production**: production release path is controlled by branch protections and admin review.
+- **Canary isolation**: canary publishes do not move `latest` and do not create production tags/releases.

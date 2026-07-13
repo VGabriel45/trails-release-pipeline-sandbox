@@ -5,7 +5,6 @@
 #
 #   APP_ID=123456 \
 #   APP_PRIVATE_KEY_FILE=./app.private-key.pem \
-#   ANTHROPIC_API_KEY=sk-ant-... \   # optional
 #   bash scripts/setup-repo.sh
 #
 # Re-runnable: skips work that is already done.
@@ -49,8 +48,6 @@ if [ -n "${APP_PRIVATE_KEY_FILE:-}" ]; then
   gh secret set "TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY" --repo "$REPO" < "$APP_PRIVATE_KEY_FILE"
   echo "✓ set secret TRAILS_SDK_RELEASE_BOT_PRIVATE_KEY"
 fi
-
-set_secret "ANTHROPIC_API_KEY" "${ANTHROPIC_API_KEY:-}"
 
 echo
 echo "Remaining manual steps:"

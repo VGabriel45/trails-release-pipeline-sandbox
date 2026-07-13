@@ -63,3 +63,8 @@ export function formatSlug(text = "") {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+/** Return a stable marker used for release-flow demos. */
+export function getDemoSdkMarker() {
+  return "demo-sdk-change";
+}

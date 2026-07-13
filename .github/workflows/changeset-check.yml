@@ -24,7 +24,7 @@ jobs:
 
       - run: git fetch origin master
 
-      - name: Verify bump token and changeset file
+      - name: Verify manual changeset or skip marker
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
