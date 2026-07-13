@@ -33,23 +33,55 @@ function publishablePackages() {
   return getPublishablePackageEntries();
 }
 
-// Confirm a specific name@version is actually live on the npm registry. Tags
-// and GitHub releases must reflect what published, not merely what the
-// manifests claim. `changeset publish` is per-package and can partially fail
-// (one package publishes, another doesn't); its failure is caught below, so we
-// re-derive the published set from the registry itself. A few retries absorb
-// brief read-path propagation lag after a successful publish.
-function isPublishedOnNpm(pkg, attempts = 3) {
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+// How long (and how often) the fallback registry check polls before giving up.
+// npm's read path is eventually consistent and can lag several minutes behind a
+// successful publish, so we poll rather than check once.
+const NPM_VIEW_POLL_INTERVAL_MS = 30_000;
+const NPM_VIEW_POLL_TIMEOUT_MS = 5 * 60_000;
+
+// Fallback confirmation for versions that were NOT freshly published in this
+// run (e.g. a retry-production run where `changeset publish` skipped a version
+// that a prior run already pushed to npm). Freshly published versions
+// deliberately bypass this check (see below): npm's read-after-write
+// propagation lag makes `npm view` 404 for minutes after a successful publish,
+// so using it as the success gate would produce false negatives. For the
+// fallback path we poll every 30s for up to 5 minutes to absorb that lag.
+function isPublishedOnNpm(
+  pkg,
+  { intervalMs = NPM_VIEW_POLL_INTERVAL_MS, timeoutMs = NPM_VIEW_POLL_TIMEOUT_MS } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  const intervalSeconds = Math.max(1, Math.round(intervalMs / 1000));
+  let attempt = 0;
+  for (;;) {
+    attempt++;
     try {
       const out = execFileOut("npm", ["view", `${pkg.name}@${pkg.version}`, "version"]);
       if (out === pkg.version) return true;
     } catch {
-      // Not on the registry yet (or not at all).
+      // Not visible on the registry read path yet (or not published at all).
     }
-    if (attempt < attempts) run(`sleep ${attempt * 2}`);
+    if (Date.now() + intervalMs > deadline) return false;
+    console.log(
+      `npm has not surfaced ${pkg.name}@${pkg.version} yet (attempt ${attempt}); re-checking in ${intervalSeconds}s…`,
+    );
+    run(`sleep ${intervalSeconds}`);
   }
-  return false;
+}
+
+// `changeset publish` prints one line per package it actually published:
+//   🦋  New tag:  @scope/name@1.2.3
+// Parsing these is the authoritative, race-free signal of what shipped — it is
+// emitted synchronously by the publish, unlike the eventually-consistent
+// `npm view` read path.
+const NEW_TAG_RE = /New tag:\s+((?:@[^/\s]+\/)?[^@\s]+)@(\S+)/;
+function parsePublishedTags(output) {
+  const set = new Set();
+  for (const line of String(output).split("\n")) {
+    const match = line.match(NEW_TAG_RE);
+    if (match) set.add(`${match[1]}@${match[2]}`);
+  }
+  return set;
 }
 
 function tagExists(tag) {
@@ -193,21 +225,44 @@ configureGitBot();
 
 ensureNpmAuth();
 
+// Capture the publish output (while still echoing it to the CI log) so we can
+// read changeset's authoritative per-package result instead of racing the npm
+// registry read path.
 let publishFailed = false;
+let publishOutput = "";
 try {
-  run("pnpm exec changeset publish");
-} catch {
+  publishOutput = execSync("pnpm exec changeset publish", {
+    encoding: "utf8",
+    env: process.env,
+  });
+} catch (err) {
   publishFailed = true;
+  publishOutput = `${err.stdout ?? ""}${err.stderr ?? ""}`;
   console.warn(
-    "changeset publish reported errors — verifying which versions actually reached npm…",
+    "changeset publish reported errors — reconciling which versions actually reached npm…",
   );
 }
+process.stdout.write(publishOutput.endsWith("\n") ? publishOutput : `${publishOutput}\n`);
 
-// Derive the released set from the registry, not the manifests, so a partial
-// publish never produces tags/releases for versions that didn't ship.
+const freshlyPublished = parsePublishedTags(publishOutput);
+
+// Derive the released set. A package counts as released if changeset just
+// published it this run (trusted from the "New tag:" output — no registry
+// race), or, for retry-production runs where changeset skipped a version a
+// prior run already shipped, if the registry confirms it. This keeps
+// tags/releases in lockstep with npm while letting a retry heal a partial
+// publish, without producing tags/releases for versions that never shipped.
 const allPublishable = publishablePackages();
-const published = allPublishable.filter((pkg) => isPublishedOnNpm(pkg));
-const unpublished = allPublishable.filter((pkg) => !published.includes(pkg));
+const published = [];
+const unpublished = [];
+for (const pkg of allPublishable) {
+  const id = `${pkg.name}@${pkg.version}`;
+  if (freshlyPublished.has(id) || isPublishedOnNpm(pkg)) {
+    published.push(pkg);
+  } else {
+    unpublished.push(pkg);
+  }
+}
 
 const tags = ensurePackageTags(published);
 run("git push origin production");
