@@ -80,3 +80,9 @@ export function greetWithPrefix(prefix = "Welcome ...", name = "world", options 
   const cleanPrefix = String(prefix ?? "").trim() || "Welcome";
   return `${cleanPrefix}: ${greet(name, options)}`;
 }
+
+/** Build a multi-line welcome banner for onboarding screens. */
+export function welcomeBanner(name = "world", { title = "Welcome" } = {}) {
+  const heading = String(title ?? "").trim() || "Welcome";
+  return `${heading}\n${greet(name)}`;
+}
