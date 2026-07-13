@@ -74,3 +74,9 @@ export function greetDisplayName(name = "") {
   const displayName = formatName(name);
   return greet(displayName || "world");
 }
+
+/** Prefix a greeting with custom label text for UI banners. */
+export function greetWithPrefix(prefix = "Welcome", name = "world", options = {}) {
+  const cleanPrefix = String(prefix ?? "").trim() || "Welcome";
+  return `${cleanPrefix}: ${greet(name, options)}`;
+}
