@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import {
   existsSync,
   readFileSync,
@@ -15,8 +15,18 @@ function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 }
 
-function execOut(cmd, env = process.env) {
-  return execSync(cmd, { encoding: "utf8", env: { ...process.env, ...env } }).trim();
+// Shell-free variants for commands that carry repo-controlled data (package
+// names/versions). Arguments are passed as an argv array, so shell
+// metacharacters in the data are inert.
+function runFile(cmd, args, env = process.env) {
+  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
+}
+
+function execFileOut(cmd, args, env = process.env) {
+  return execFileSync(cmd, args, {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  }).trim();
 }
 
 function publishablePackages() {
@@ -25,7 +35,7 @@ function publishablePackages() {
 
 function tagExists(tag) {
   try {
-    execOut(`git rev-parse "refs/tags/${tag}^{}"`);
+    execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
     return true;
   } catch {
     return false;
@@ -34,7 +44,7 @@ function tagExists(tag) {
 
 function tagExistsRemote(tag) {
   try {
-    const out = execOut(`git ls-remote --tags origin "refs/tags/${tag}"`);
+    const out = execFileOut("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
     return out.length > 0;
   } catch {
     return false;
@@ -51,7 +61,7 @@ function ensurePackageTags() {
     const tag = `${pkg.name}@${pkg.version}`;
     if (!tagExists(tag)) {
       console.log(`Creating missing tag ${tag}`);
-      run(`git tag -a "${tag}" -m "${tag}"`);
+      runFile("git", ["tag", "-a", tag, "-m", tag]);
     }
     tags.push(tag);
   }
@@ -61,7 +71,7 @@ function ensurePackageTags() {
 function pushMissingTags(tags) {
   for (const tag of tags) {
     if (tagExistsRemote(tag)) continue;
-    run(`git push origin "refs/tags/${tag}"`);
+    runFile("git", ["push", "origin", `refs/tags/${tag}`]);
   }
 }
 
@@ -69,7 +79,7 @@ function ensureGitHubReleases(ghToken) {
   for (const pkg of publishablePackages()) {
     const tag = `${pkg.name}@${pkg.version}`;
     try {
-      execSync(`gh release view "${tag}"`, {
+      execFileSync("gh", ["release", "view", tag], {
         stdio: "pipe",
         env: { ...process.env, GH_TOKEN: ghToken },
       });
@@ -82,12 +92,15 @@ function ensureGitHubReleases(ghToken) {
     if (notes) {
       const notesFile = join(tmpdir(), `release-notes-${pkg.name.replace(/[^\w.-]+/g, "-")}-${pkg.version}.md`);
       writeFileSync(notesFile, `${notes}\n`);
-      run(
-        `gh release create "${tag}" --title "${tag}" --notes-file "${notesFile}"`,
+      runFile(
+        "gh",
+        ["release", "create", tag, "--title", tag, "--notes-file", notesFile],
         { GH_TOKEN: ghToken },
       );
     } else {
-      run(`gh release create "${tag}" --generate-notes`, { GH_TOKEN: ghToken });
+      runFile("gh", ["release", "create", tag, "--generate-notes"], {
+        GH_TOKEN: ghToken,
+      });
     }
   }
 }
@@ -134,22 +147,26 @@ function configureGitBot() {
   if (slug) {
     let userId = "";
     try {
-      userId = execOut(`gh api "/users/${slug}[bot]" --jq .id`);
+      userId = execFileOut("gh", ["api", `/users/${slug}[bot]`, "--jq", ".id"]);
     } catch {
       // fall through to github-actions[bot]
     }
     if (userId) {
-      run(`git config user.name "${slug}[bot]"`);
-      run(
-        `git config user.email "${userId}+${slug}[bot]@users.noreply.github.com"`,
-      );
+      runFile("git", ["config", "user.name", `${slug}[bot]`]);
+      runFile("git", [
+        "config",
+        "user.email",
+        `${userId}+${slug}[bot]@users.noreply.github.com`,
+      ]);
       return;
     }
   }
-  run('git config user.name "github-actions[bot]"');
-  run(
-    'git config user.email "41898282+github-actions[bot]@users.noreply.github.com"',
-  );
+  runFile("git", ["config", "user.name", "github-actions[bot]"]);
+  runFile("git", [
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com",
+  ]);
 }
 
 configureGitBot();
