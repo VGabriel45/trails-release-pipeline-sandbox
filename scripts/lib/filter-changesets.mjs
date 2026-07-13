@@ -8,10 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { load as yamlLoad } from "js-yaml";
 
 const CHANGESET_DIR = ".changeset";
 const HELD_DIR = ".release-held";
-const PKG_LINE = /^("[^"]+"|[^\s:#]+):\s*(patch|minor|major)\s*$/i;
 
 /** @returns {null | Set<string>} null = include all packages in pending changesets */
 export function parsePackageSelection(raw) {
@@ -27,25 +27,29 @@ export function parsePackageSelection(raw) {
   );
 }
 
-function parseChangesetFile(raw) {
+export function parseChangesetFile(raw) {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) return null;
-  const packages = [];
-  for (const line of match[1].split("\n")) {
-    const m = line.match(PKG_LINE);
-    if (m) {
-      packages.push({
-        line,
-        name: m[1].replace(/"/g, ""),
-        bump: m[2].toLowerCase(),
-      });
-    }
+  let parsed;
+  try {
+    parsed = yamlLoad(match[1]);
+  } catch {
+    return null;
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const packages = Object.entries(parsed)
+    .filter(([, bump]) => /^(patch|minor|major)$/i.test(String(bump ?? "")))
+    .map(([name, bump]) => ({
+      name,
+      bump: String(bump).toLowerCase(),
+    }));
   return { packages, body: match[2].trimEnd() };
 }
 
-function serializeChangeset(packages, body) {
-  const frontmatter = packages.map((p) => p.line).join("\n");
+export function serializeChangeset(packages, body) {
+  const frontmatter = packages
+    .map((p) => `${JSON.stringify(p.name)}: ${p.bump}`)
+    .join("\n");
   const summary = body ? `\n${body}\n` : "\n";
   return `---\n${frontmatter}\n---${summary}`;
 }

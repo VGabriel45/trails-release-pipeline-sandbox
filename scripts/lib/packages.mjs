@@ -9,6 +9,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 // can never smuggle shell metacharacters or option-like strings into commands.
 const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+export const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 
 export function assertSafePackageMetadata(name, version, source) {
   if (typeof name !== "string" || !NPM_NAME_RE.test(name)) {
@@ -68,6 +69,21 @@ export function assertIgnoredPackagesArePrivate() {
   }
 }
 
+// Keep publishing and verification pinned to the canonical npm registry.
+// Changesets publish follows package.json publishConfig.registry; allowing repo-
+// controlled alternate registries would break release metadata guarantees.
+export function assertPublishRegistryPinnedToNpm(pkgs = getPublishablePackageEntries()) {
+  for (const pkg of pkgs) {
+    const path = join(ROOT, pkg.dir, "package.json");
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const configured = parsed?.publishConfig?.registry;
+    if (!configured) continue;
+    if (String(configured).replace(/\/+$/, "") === NPM_REGISTRY_URL) continue;
+    throw new Error(
+      `Refusing to publish ${pkg.name}: publishConfig.registry must be ${NPM_REGISTRY_URL} (found ${JSON.stringify(configured)} in ${pkg.dir}/package.json).`,
+    );
+  }
+}
 /** Walk packages/* and return publishable package metadata (respects private + ignore). */
 export function getPublishablePackageEntries() {
   const ignored = getIgnoredPackages();

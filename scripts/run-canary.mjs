@@ -6,7 +6,9 @@ import {
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
 import {
   assertIgnoredPackagesArePrivate,
+  assertPublishRegistryPinnedToNpm,
   getPublishablePackageEntries,
+  NPM_REGISTRY_URL,
 } from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
@@ -16,9 +18,11 @@ function run(cmd, env = process.env) {
 function canaryVersion(pkgName) {
   try {
     // argv array — no shell, so metacharacters in pkgName are inert.
-    const out = execFileSync("npm", ["view", pkgName, "dist-tags", "--json"], {
-      encoding: "utf8",
-    }).trim();
+    const out = execFileSync(
+      "npm",
+      ["view", pkgName, "dist-tags", "--json", "--registry", NPM_REGISTRY_URL],
+      { encoding: "utf8" },
+    ).trim();
     const tags = JSON.parse(out);
     return tags?.canary ?? null;
   } catch {
@@ -106,7 +110,9 @@ function snapshotBumpedPackages() {
 }
 
 assertIgnoredPackagesArePrivate();
+assertPublishRegistryPinnedToNpm();
 
+const requestedSet = parsePackageSelection(process.env.RELEASE_PACKAGES ?? "all");
 const selectedPackages = selectedPackagesFromInput(process.env.RELEASE_PACKAGES);
 if (selectedPackages.length === 0) {
   console.error("No publishable packages match RELEASE_PACKAGES.");
@@ -129,16 +135,19 @@ process.env.CHANGESET_SNAPSHOT = "1";
 run("pnpm exec changeset version --snapshot canary");
 
 const bumped = snapshotBumpedPackages();
-const selectedSet = new Set(changedPackages);
-const unexpected = bumped.filter((name) => !selectedSet.has(name));
-if (unexpected.length > 0) {
+const unexpected = requestedSet
+  ? bumped.filter((name) => !requestedSet.has(name))
+  : [];
+if (requestedSet && unexpected.length > 0) {
   console.error(
-    `Selective canary expanded beyond requested packages. Requested: ${changedPackages.join(", ")}. Expanded to include: ${unexpected.join(", ")}. Re-run with All modified packages or include these packages explicitly.`,
+    `Selective canary expanded beyond requested packages. Requested: ${[...requestedSet].join(", ")}. Expanded to include: ${unexpected.join(", ")}. Re-run with All modified packages or include these packages explicitly.`,
   );
   process.exit(1);
 }
 
 ensureNpmAuth();
-run("pnpm exec changeset publish --no-git-tag --tag canary");
+run("pnpm exec changeset publish --no-git-tag --tag canary", {
+  npm_config_registry: NPM_REGISTRY_URL,
+});
 
 console.log("Canary publish complete.");

@@ -10,7 +10,9 @@ import { join } from "node:path";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
 import {
   assertIgnoredPackagesArePrivate,
+  assertPublishRegistryPinnedToNpm,
   getPublishablePackageEntries,
+  NPM_REGISTRY_URL,
 } from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
@@ -58,7 +60,13 @@ function isPublishedOnNpm(
   for (;;) {
     attempt++;
     try {
-      const out = execFileOut("npm", ["view", `${pkg.name}@${pkg.version}`, "version"]);
+      const out = execFileOut("npm", [
+        "view",
+        `${pkg.name}@${pkg.version}`,
+        "version",
+        "--registry",
+        NPM_REGISTRY_URL,
+      ]);
       if (out === pkg.version) return true;
     } catch {
       // Not visible on the registry read path yet (or not published at all).
@@ -71,36 +79,30 @@ function isPublishedOnNpm(
   }
 }
 
-// `changeset publish` prints one line per package it actually published:
-//   🦋  New tag:  @scope/name@1.2.3
-// Parsing these is the authoritative, race-free signal of what shipped — it is
-// emitted synchronously by the publish, unlike the eventually-consistent
-// `npm view` read path.
-const NEW_TAG_RE = /New tag:\s+((?:@[^/\s]+\/)?[^@\s]+)@(\S+)/;
-function parsePublishedTags(output) {
-  const set = new Set();
-  for (const line of String(output).split("\n")) {
-    const match = line.match(NEW_TAG_RE);
-    if (match) set.add(`${match[1]}@${match[2]}`);
-  }
-  return set;
+function headCommit() {
+  return execFileOut("git", ["rev-parse", "HEAD"]);
 }
 
-function tagExists(tag) {
+function localTagCommit(tag) {
   try {
-    execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
-    return true;
+    return execFileOut("git", ["rev-parse", `refs/tags/${tag}^{}`]);
   } catch {
-    return false;
+    return null;
   }
 }
 
-function tagExistsRemote(tag) {
+function remoteTagCommit(tag) {
   try {
-    const out = execFileOut("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
-    return out.length > 0;
+    const out = execFileOut("git", [
+      "ls-remote",
+      "--tags",
+      "origin",
+      `refs/tags/${tag}^{}`,
+    ]);
+    if (out.length === 0) return null;
+    return out.split(/\s+/)[0];
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -109,22 +111,35 @@ function tagExistsRemote(tag) {
 // run skips packages whose tag already exists, so the version could never be
 // republished. Keeping tags in lockstep with npm lets retries heal a partial
 // publish.
-function ensurePackageTags(pkgs) {
+function ensurePackageTags(pkgs, expectedCommit) {
   const tags = [];
   for (const pkg of pkgs) {
     const tag = `${pkg.name}@${pkg.version}`;
-    if (!tagExists(tag)) {
+    const existingCommit = localTagCommit(tag);
+    if (!existingCommit) {
       console.log(`Creating missing tag ${tag}`);
       runFile("git", ["tag", "-a", tag, "-m", tag]);
+    } else if (existingCommit !== expectedCommit) {
+      throw new Error(
+        `Existing local tag ${tag} points at ${existingCommit}, expected ${expectedCommit}. Refusing to continue.`,
+      );
     }
     tags.push(tag);
   }
   return tags;
 }
 
-function pushMissingTags(tags) {
+function pushMissingTags(tags, expectedCommit) {
   for (const tag of tags) {
-    if (tagExistsRemote(tag)) continue;
+    const existingCommit = remoteTagCommit(tag);
+    if (existingCommit) {
+      if (existingCommit !== expectedCommit) {
+        throw new Error(
+          `Remote tag ${tag} points at ${existingCommit}, expected ${expectedCommit}. Refusing to continue.`,
+        );
+      }
+      continue;
+    }
     runFile("git", ["push", "origin", `refs/tags/${tag}`]);
   }
 }
@@ -229,15 +244,17 @@ assertIgnoredPackagesArePrivate();
 
 ensureNpmAuth();
 
-// Capture the publish output (while still echoing it to the CI log) so we can
-// read changeset's authoritative per-package result instead of racing the npm
-// registry read path.
+const allPublishable = publishablePackages();
+assertPublishRegistryPinnedToNpm(allPublishable);
+
+// Capture publish output for observability/debugging. Release truth comes from
+// npmjs registry verification below, not from stdout parsing.
 let publishFailed = false;
 let publishOutput = "";
 try {
   publishOutput = execSync("pnpm exec changeset publish", {
     encoding: "utf8",
-    env: process.env,
+    env: { ...process.env, npm_config_registry: NPM_REGISTRY_URL },
   });
 } catch (err) {
   publishFailed = true;
@@ -248,28 +265,21 @@ try {
 }
 process.stdout.write(publishOutput.endsWith("\n") ? publishOutput : `${publishOutput}\n`);
 
-const freshlyPublished = parsePublishedTags(publishOutput);
-
-// Derive the released set. A package counts as released if changeset just
-// published it this run (trusted from the "New tag:" output — no registry
-// race), or, for retry-production runs where changeset skipped a version a
-// prior run already shipped, if the registry confirms it. This keeps
-// tags/releases in lockstep with npm while letting a retry heal a partial
-// publish, without producing tags/releases for versions that never shipped.
-const allPublishable = publishablePackages();
+// Derive the released set from the canonical npmjs registry only. This avoids
+// trusting tool stdout for publish success and avoids registry redirection.
 const published = [];
 const unpublished = [];
 for (const pkg of allPublishable) {
-  const id = `${pkg.name}@${pkg.version}`;
-  if (freshlyPublished.has(id) || isPublishedOnNpm(pkg)) {
+  if (isPublishedOnNpm(pkg)) {
     published.push(pkg);
   } else {
     unpublished.push(pkg);
   }
 }
 
-const tags = ensurePackageTags(published);
-pushMissingTags(tags);
+const expectedCommit = headCommit();
+const tags = ensurePackageTags(published, expectedCommit);
+pushMissingTags(tags, expectedCommit);
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 ensureGitHubReleases(published, ghToken);
