@@ -46,3 +46,8 @@ export function capitalize(text = "") {
   if (input === "") return "";
   return input.charAt(0).toUpperCase() + input.slice(1);
 }
+
+/** Return true when value is a non-empty trimmed string. */
+export function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
