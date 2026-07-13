@@ -30,7 +30,9 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'production' }}
+  # Keep production push + retry-production in the same lock to avoid races.
+  # Only canary gets its own group.
+  group: release-publish-${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'canary' && 'canary' || 'production' }}
   cancel-in-progress: false
 
 jobs:
@@ -76,6 +78,13 @@ jobs:
           const root = process.cwd();
           const config = JSON.parse(readFileSync(join(root, ".changeset/config.json"), "utf8"));
           const ignored = new Set(config.ignore ?? []);
+          const ZERO_SHA = /^0{40}$/;
+
+          if (!before || ZERO_SHA.test(before)) {
+            console.log("Production branch creation/reset event detected (before SHA is zero). Skipping publish auto-detection for this push.");
+            appendFileSync(output, "publish=false\n");
+            process.exit(0);
+          }
 
           let shouldPublish = false;
           const changed = [];

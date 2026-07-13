@@ -31,6 +31,43 @@ export function getIgnoredPackages() {
   return new Set(config.ignore ?? []);
 }
 
+/**
+ * Guardrail: Changesets `publish` ignores `.changeset/config.json` `ignore`.
+ * To prevent publishing a package that this pipeline intentionally ignores for
+ * release metadata, require every ignored package to be `private: true`.
+ */
+export function assertIgnoredPackagesArePrivate() {
+  const ignored = getIgnoredPackages();
+  if (ignored.size === 0) return;
+
+  const nonPrivateIgnored = [];
+  const packagesDir = join(ROOT, "packages");
+  for (const entry of readdirSync(packagesDir)) {
+    const dir = join(packagesDir, entry);
+    if (!statSync(dir).isDirectory()) continue;
+    const pkgPath = join(dir, "package.json");
+    let pkg;
+    try {
+      pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    } catch {
+      continue;
+    }
+    if (!ignored.has(pkg.name)) continue;
+    if (pkg.private === true) continue;
+    nonPrivateIgnored.push({
+      name: pkg.name,
+      path: join("packages", entry, "package.json"),
+    });
+  }
+
+  if (nonPrivateIgnored.length > 0) {
+    const names = nonPrivateIgnored.map((p) => `${p.name} (${p.path})`).join(", ");
+    throw new Error(
+      `Invalid changeset ignore configuration: ignored packages must be private to avoid publish/reconciliation drift. Mark these private or remove them from .changeset/config.json ignore: ${names}`,
+    );
+  }
+}
+
 /** Walk packages/* and return publishable package metadata (respects private + ignore). */
 export function getPublishablePackageEntries() {
   const ignored = getIgnoredPackages();

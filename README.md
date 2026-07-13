@@ -111,6 +111,9 @@ changeset nor a skip marker is present, **Changeset Check** fails.
 2. Open **Actions → Prepare release → Run workflow**.
 3. Choose **All modified packages**, or select a specific package when you
    intentionally want a partial release.
+   - Selective mode is strict: if Changesets would expand to additional
+     packages (dependency/fixed-group propagation), prepare fails and lists the
+     extra packages to include.
 4. Review the resulting `master → production` release PR. It contains the
    package version updates, changelog entries, and consumed changesets.
 5. Merge it using **Create a merge commit**.
@@ -128,6 +131,9 @@ To publish a test snapshot without moving the npm `latest` tag:
 
 1. Open **Actions → Publish release → Run workflow**.
 2. Choose `canary` mode and select the package scope.
+   - Selective canary mode is strict for the same reason as prepare; if the
+     computed snapshot would include extra packages, the job fails with the
+     expanded package list.
 3. Confirm the **Publish canary** job succeeds.
 
 Canary releases use the `canary` dist-tag, do not create production tags or
