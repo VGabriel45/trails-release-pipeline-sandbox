@@ -1,6 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
 import {
-  existsSync,
   readFileSync,
   readdirSync,
   statSync,
@@ -9,7 +8,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
-import { getPublishablePackageEntries } from "./lib/packages.mjs";
+import {
+  assertIgnoredPackagesArePrivate,
+  getPublishablePackageEntries,
+} from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -223,6 +225,8 @@ function configureGitBot() {
 
 configureGitBot();
 
+assertIgnoredPackagesArePrivate();
+
 ensureNpmAuth();
 
 // Capture the publish output (while still echoing it to the CI log) so we can
@@ -265,7 +269,6 @@ for (const pkg of allPublishable) {
 }
 
 const tags = ensurePackageTags(published);
-run("git push origin production");
 pushMissingTags(tags);
 
 const ghToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;

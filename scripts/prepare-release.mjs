@@ -1,11 +1,16 @@
 import { execFileSync, execSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   filterChangesetsByPackage,
+  parsePackageSelection,
+  packagesInPendingChangesets,
   restoreHeldChangesets,
 } from "./lib/filter-changesets.mjs";
-import { getPublishablePackageEntries } from "./lib/packages.mjs";
+import {
+  assertIgnoredPackagesArePrivate,
+  getPublishablePackageEntries,
+} from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -92,6 +97,18 @@ function publishablePackages() {
   return getPublishablePackageEntries();
 }
 
+function enforceSelectionBoundary(released, selectionRaw) {
+  const selected = parsePackageSelection(selectionRaw ?? "all");
+  if (!selected) return;
+  const unexpected = released.filter((pkg) => !selected.has(pkg.name));
+  if (unexpected.length === 0) return;
+  throw new Error(
+    `Selective release exceeded requested packages. Requested: ${[...selected].join(", ")}. Expanded to include: ${unexpected
+      .map((pkg) => `${pkg.name}@${pkg.version}`)
+      .join(", ")}. Re-run with All modified packages or include the expanded packages explicitly.`,
+  );
+}
+
 // While a package is pre-1.0 (version 0.x) we don't follow strict semver yet:
 // a `major` bump would jump to 1.0.0, which we don't want during early dev.
 // Rewrite `major` -> `minor` in pending changesets for any 0.x package so the
@@ -111,7 +128,11 @@ function capPre1MajorBumps() {
     if (!file.endsWith(".md")) continue;
     const path = join(".changeset", file);
     const raw = readFileSync(path, "utf8");
-    const updated = raw.replace(
+    const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---(\r?\n[\s\S]*)?$/);
+    if (!match) continue;
+    const frontmatter = match[1];
+    const suffix = match[2] ?? "\n";
+    const updatedFrontmatter = frontmatter.replace(
       /^("[^"]+"|[^\s:]+):[ \t]*major[ \t]*$/gim,
       (line, nameToken) => {
         const name = nameToken.replace(/"/g, "");
@@ -122,6 +143,7 @@ function capPre1MajorBumps() {
         return line;
       },
     );
+    const updated = `---\n${updatedFrontmatter}\n---${suffix}`;
     if (updated !== raw) writeFileSync(path, updated);
   }
 
@@ -133,10 +155,7 @@ function capPre1MajorBumps() {
 }
 
 function hasPendingChangesets() {
-  const pending = execOut('ls .changeset/*.md 2>/dev/null || true', {
-    shell: "/bin/bash",
-  });
-  return pending.length > 0;
+  return packagesInPendingChangesets().length > 0;
 }
 
 function masterAheadOfProduction() {
@@ -183,6 +202,7 @@ function openReleasePr(title, body, ghToken) {
   );
 
   if (existing) {
+    runFile("gh", ["pr", "edit", existing, "--title", title, "--body", body], env);
     console.log(`Release PR already open: ${existing}`);
     return existing;
   }
@@ -209,6 +229,10 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
+assertIgnoredPackagesArePrivate();
+
+let selectionAlreadyConsumed = false;
+
 // Only filter when changesets actually exist. When none remain — because a
 // prior prepare run already consumed them, or an admin bumped a package.json
 // version by hand — skip filtering and fall through to the
@@ -218,14 +242,25 @@ if (hasPendingChangesets()) {
   try {
     filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
   } catch (err) {
-    console.error(err.message);
-    process.exit(1);
+    if (
+      err?.message?.startsWith(
+        "No pending changesets left after filtering to:",
+      )
+    ) {
+      selectionAlreadyConsumed = true;
+      console.warn(
+        `${err.message}. Continuing: selected changesets are already consumed; will attempt release PR recovery from master vs production divergence.`,
+      );
+    } else {
+      console.error(err.message);
+      process.exit(1);
+    }
   }
 }
 
 let released;
 
-if (hasPendingChangesets()) {
+if (hasPendingChangesets() && !selectionAlreadyConsumed) {
   capPre1MajorBumps();
 
   console.log("Pending changesets found — running changeset version…");
@@ -236,6 +271,7 @@ if (hasPendingChangesets()) {
   }
 
   released = releasedPackages();
+  enforceSelectionBoundary(released, process.env.RELEASE_PACKAGES);
   if (released.length === 0) {
     throw new Error("changeset version ran but no package versions changed.");
   }
@@ -249,6 +285,7 @@ if (hasPendingChangesets()) {
   run("git push origin master");
 } else if (masterAheadOfProduction()) {
   released = releasedPackages();
+  enforceSelectionBoundary(released, process.env.RELEASE_PACKAGES);
   if (released.length === 0) {
     console.error(
       "Master is ahead of production but no publishable package versions differ.",

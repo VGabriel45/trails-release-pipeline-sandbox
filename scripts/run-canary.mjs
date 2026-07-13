@@ -4,7 +4,10 @@ import {
   selectCanaryChangesets,
 } from "./lib/filter-changesets.mjs";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
-import { getPublishablePackageEntries } from "./lib/packages.mjs";
+import {
+  assertIgnoredPackagesArePrivate,
+  getPublishablePackageEntries,
+} from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -83,6 +86,27 @@ function selectedPackagesFromInput(raw) {
   return available.filter((name) => allow.has(name));
 }
 
+function snapshotBumpedPackages() {
+  const bumped = [];
+  for (const pkg of getPublishablePackageEntries()) {
+    let beforeVersion = null;
+    try {
+      const raw = execFileSync("git", ["show", `HEAD:${pkg.dir}/package.json`], {
+        encoding: "utf8",
+      }).trim();
+      beforeVersion = JSON.parse(raw).version ?? null;
+    } catch {
+      // Missing in HEAD (new package) — treat as bumped.
+      bumped.push(pkg.name);
+      continue;
+    }
+    if (beforeVersion !== pkg.version) bumped.push(pkg.name);
+  }
+  return bumped;
+}
+
+assertIgnoredPackagesArePrivate();
+
 const selectedPackages = selectedPackagesFromInput(process.env.RELEASE_PACKAGES);
 if (selectedPackages.length === 0) {
   console.error("No publishable packages match RELEASE_PACKAGES.");
@@ -103,6 +127,16 @@ selectCanaryChangesets(changedPackages);
 
 process.env.CHANGESET_SNAPSHOT = "1";
 run("pnpm exec changeset version --snapshot canary");
+
+const bumped = snapshotBumpedPackages();
+const selectedSet = new Set(changedPackages);
+const unexpected = bumped.filter((name) => !selectedSet.has(name));
+if (unexpected.length > 0) {
+  console.error(
+    `Selective canary expanded beyond requested packages. Requested: ${changedPackages.join(", ")}. Expanded to include: ${unexpected.join(", ")}. Re-run with All modified packages or include these packages explicitly.`,
+  );
+  process.exit(1);
+}
 
 ensureNpmAuth();
 run("pnpm exec changeset publish --no-git-tag --tag canary");
