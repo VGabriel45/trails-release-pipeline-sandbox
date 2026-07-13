@@ -131,7 +131,12 @@ export function filterChangesetsByPackage(selection, dir = CHANGESET_DIR) {
 
     keptAny = true;
     if (kept.length < parsed.packages.length) {
-      writeFileSync(join(HELD_DIR, file), raw);
+      // Hold ONLY the unselected entries. Writing the original (which still
+      // lists the selected package) would, after restoreHeldChangesets(),
+      // re-add the just-released package as a pending changeset and bump it
+      // again on the next release.
+      const held = parsed.packages.filter((pkg) => !allow.has(pkg.name));
+      writeFileSync(join(HELD_DIR, file), serializeChangeset(held, parsed.body));
       writeFileSync(path, serializeChangeset(kept, parsed.body));
       console.log(`Trimmed ${file} to: ${kept.map((p) => p.name).join(", ")}`);
     }
