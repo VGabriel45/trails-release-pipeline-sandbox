@@ -1,5 +1,11 @@
 import { execFileSync, execSync } from "node:child_process";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   filterChangesetsByPackage,
@@ -178,6 +184,116 @@ function masterAheadOfProduction() {
   return Number(count) > 0;
 }
 
+function findOpenReleasePr(ghToken) {
+  return execOut(
+    'gh pr list --base production --head master --state open --json url --jq ".[0].url // empty"',
+    { ...process.env, GH_TOKEN: ghToken },
+  );
+}
+
+// --- In-flight release aggregation -----------------------------------------
+//
+// When a release PR is already open and NEW changesets land on master, we want
+// the same release to absorb them instead of stacking a second bump on top
+// (2.4.0 -> 2.5.0). To do that we rebuild the release from the production
+// baseline: restore package versions and changelogs to what production has,
+// resurrect the changesets that earlier prepare runs consumed, and let the
+// normal flow below re-run `changeset version` ONCE over the combined set.
+//
+// Outcome: if the new changesets fit within the in-flight bump level
+// (minor + patch), the version stays the same and the changelog aggregates.
+// If a new changeset demands a higher bump (major on top of a minor release),
+// the version is re-evaluated upward — exactly semver over the full set.
+
+// Restore every consumed changeset from the release commits that sit between
+// production and master. Each prepare run makes exactly one
+// "chore(release): …" commit; the parent of that commit holds the changeset
+// files as they were before `changeset version` consumed them.
+function restoreConsumedChangesets() {
+  const releaseCommits = execOut(
+    "git log --format=%H --grep='^chore(release):' origin/production..HEAD",
+  )
+    .split("\n")
+    .filter(Boolean)
+    .reverse(); // oldest first: its parent has the fullest pre-consumption content
+
+  const restored = new Set();
+  for (const sha of releaseCommits) {
+    const changed = execFileOut("git", [
+      "show",
+      "--name-status",
+      "--format=",
+      sha,
+      "--",
+      ".changeset",
+    ]);
+    for (const line of changed.split("\n")) {
+      const match = line.match(/^([DM])\t(.+\.md)$/);
+      if (!match) continue;
+      const [, status, path] = match;
+      if (path.endsWith("README.md") || restored.has(path)) continue;
+      if (status === "D" && existsSync(path)) {
+        // A new changeset reused this filename after the old one was consumed.
+        // Keep the new file; the consumed content is unrecoverable by name.
+        console.warn(`Skipping restore of ${path}: a newer file exists with that name.`);
+        continue;
+      }
+      const content = execFileSync("git", ["show", `${sha}^:${path}`], {
+        encoding: "utf8",
+      });
+      writeFileSync(path, content);
+      restored.add(path);
+    }
+  }
+  if (restored.size > 0) {
+    console.log(
+      `Restored ${restored.size} changeset(s) consumed by in-flight release commits: ${[...restored].join(", ")}`,
+    );
+  }
+}
+
+// Reset publishable package versions and changelogs to the production
+// baseline so `changeset version` recomputes the release from scratch.
+function rebuildInFlightReleaseBaseline() {
+  console.log(
+    "Release PR is open and new changesets landed — rebuilding the release from the production baseline so the same release absorbs them.",
+  );
+
+  for (const pkg of publishablePackages()) {
+    const prodVersion = productionVersion(pkg.dir);
+    if (prodVersion && prodVersion !== pkg.version) {
+      const manifestPath = join(pkg.dir, "package.json");
+      const raw = readFileSync(manifestPath, "utf8");
+      writeFileSync(
+        manifestPath,
+        raw.replace(/("version"\s*:\s*")[^"]+(")/, `$1${prodVersion}$2`),
+      );
+    }
+
+    const changelogPath = join(pkg.dir, "CHANGELOG.md");
+    try {
+      const prodChangelog = execFileSync(
+        "git",
+        ["show", `origin/production:${changelogPath}`],
+        { encoding: "utf8" },
+      );
+      writeFileSync(changelogPath, prodChangelog);
+    } catch {
+      // Changelog doesn't exist on production — it was created by the
+      // in-flight release. Drop it; changeset version will recreate it.
+      if (existsSync(changelogPath)) unlinkSync(changelogPath);
+    }
+  }
+
+  restoreConsumedChangesets();
+
+  if (!hasPendingChangesets()) {
+    throw new Error(
+      "Rebuild found no changesets to re-version after restoring the production baseline. The in-flight release commits did not consume any recoverable changesets — resolve manually (close the release PR or reset master).",
+    );
+  }
+}
+
 // Configure the committer as the release bot. Portable: derives the identity
 // from the app slug (APP_SLUG, set by the workflow from create-github-app-token)
 // and falls back to github-actions[bot] when not running as an app.
@@ -211,10 +327,7 @@ function configureGitBot() {
 function openReleasePr(title, body, ghToken) {
   const env = { ...process.env, GH_TOKEN: ghToken };
 
-  const existing = execOut(
-    'gh pr list --base production --head master --state open --json url --jq ".[0].url // empty"',
-    env,
-  );
+  const existing = findOpenReleasePr(ghToken);
 
   if (existing) {
     runFile("gh", ["pr", "edit", existing, "--title", title, "--body", body], env);
@@ -245,6 +358,21 @@ if (!ghToken) {
 process.env.GITHUB_TOKEN ??= ghToken;
 
 assertIgnoredPackagesArePrivate();
+
+// In-flight release aggregation: when new changesets are pending, master
+// already carries staged bumps from an earlier prepare run, AND that release
+// PR is still open, rebuild from the production baseline so the same release
+// absorbs the new changesets (same version if they fit the in-flight bump
+// level; re-evaluated upward if e.g. a major landed on a minor release).
+// If the PR was closed, we intentionally do NOT rebuild — a fresh PR stacks
+// on top of the existing staged bumps instead.
+if (
+  hasPendingChangesets() &&
+  releasedPackages().length > 0 &&
+  findOpenReleasePr(ghToken)
+) {
+  rebuildInFlightReleaseBaseline();
+}
 
 let selectionAlreadyConsumed = false;
 

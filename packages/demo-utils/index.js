@@ -46,3 +46,17 @@ export function capitalize(text = "") {
   if (input === "") return "";
   return input.charAt(0).toUpperCase() + input.slice(1);
 }
+
+/** Join truthy class tokens with single-space separators. */
+export function classNames(...tokens) {
+  return tokens
+    .flat()
+    .filter((token) => typeof token === "string" && token.trim().length > 0)
+    .map((token) => token.trim())
+    .join(" ");
+}
+
+/** Return true when value is a non-empty trimmed string. */
+export function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}

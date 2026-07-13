@@ -125,6 +125,20 @@ release. Its `retry-production` mode is an admin-only recovery path for a
 failed production publish and always runs against the current `production`
 tip.
 
+### Adding changes while a release PR is open
+
+You can keep merging feature PRs (with changesets) into `master` after a
+release PR is open. Re-run **Prepare release** and the same release absorbs
+them: prepare rebuilds the release from the `production` baseline, so the new
+changesets aggregate into the existing changelog section without stacking a
+second version bump. The version only moves if a new changeset requires a
+higher bump than the in-flight release (for example, a `major` landing on a
+`minor` release re-evaluates the version upward). The open release PR's title
+and body are updated to match.
+
+If the release PR was closed instead of merged, re-running prepare stacks a
+new release on top of the staged version bumps rather than rebuilding.
+
 ## Canary releases
 
 To publish a test snapshot without moving the npm `latest` tag:
