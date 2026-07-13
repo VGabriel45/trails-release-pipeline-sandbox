@@ -161,3 +161,54 @@ export function discardHeldChangesets() {
     unlinkSync(join(HELD_DIR, file));
   }
 }
+
+/** Remove every pending changeset file (keeps the changesets README). */
+function removePendingChangesets(dir = CHANGESET_DIR) {
+  for (const file of listPendingChangesetFiles(dir)) {
+    if (file.toLowerCase() === "readme.md") continue;
+    unlinkSync(join(dir, file));
+  }
+}
+
+/** Write a synthetic patch changeset covering the given packages (canary only). */
+export function writeSyntheticCanaryChangeset(packageNames, dir = CHANGESET_DIR) {
+  if (packageNames.length === 0) return;
+  const frontmatter = packageNames.map((name) => `"${name}": patch`).join("\n");
+  const body = "Synthetic canary snapshot.";
+  writeFileSync(
+    join(dir, "canary-snapshot-auto.md"),
+    `---\n${frontmatter}\n---\n${body}\n`,
+  );
+  console.log(`Created synthetic canary changeset for: ${packageNames.join(", ")}.`);
+}
+
+/**
+ * Reduce the pending changeset set to EXACTLY `packageNames` for an ephemeral
+ * canary run: trim/hold changesets that reference other packages, and
+ * synthesize a patch changeset for any target package that has none. This
+ * guarantees the canary publishes exactly the given packages — no unrelated
+ * pending changeset rides along, and no requested package is skipped. Safe with
+ * zero pending changesets. Held files are left aside (canary never commits).
+ */
+export function selectCanaryChangesets(packageNames, dir = CHANGESET_DIR) {
+  const target = new Set(packageNames);
+  const pendingBefore = packagesInPendingChangesets(dir);
+  const pendingTarget = pendingBefore.filter((name) => target.has(name));
+
+  if (pendingTarget.length > 0) {
+    // At least one target package has a real changeset. Only trim if some
+    // pending changeset references a package outside the target set.
+    if (pendingBefore.some((name) => !target.has(name))) {
+      filterChangesetsByPackage([...target].join(" "), dir);
+    }
+  } else if (pendingBefore.length > 0) {
+    // Only unrelated packages have changesets — drop them so they don't publish.
+    removePendingChangesets(dir);
+  }
+
+  const pendingNow = new Set(packagesInPendingChangesets(dir));
+  const missing = packageNames.filter((name) => !pendingNow.has(name));
+  writeSyntheticCanaryChangeset(missing, dir);
+
+  return packageNames;
+}

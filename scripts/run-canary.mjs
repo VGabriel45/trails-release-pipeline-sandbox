@@ -1,27 +1,13 @@
 import { execFileSync, execSync, spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
 import {
-  filterChangesetsByPackage,
-  packagesInPendingChangesets,
   parsePackageSelection,
+  selectCanaryChangesets,
 } from "./lib/filter-changesets.mjs";
 import { ensureNpmAuth } from "./lib/npm-auth.mjs";
 import { getPublishablePackageEntries } from "./lib/packages.mjs";
 
 function run(cmd, env = process.env) {
   execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
-}
-
-function hasPendingChangesets() {
-  try {
-    const out = execSync('ls .changeset/*.md 2>/dev/null || true', {
-      encoding: "utf8",
-      shell: "/bin/bash",
-    }).trim();
-    return out.length > 0;
-  } catch {
-    return existsSync(".changeset");
-  }
 }
 
 function canaryVersion(pkgName) {
@@ -97,19 +83,6 @@ function selectedPackagesFromInput(raw) {
   return available.filter((name) => allow.has(name));
 }
 
-function writeSyntheticCanaryChangeset(packageNames) {
-  if (packageNames.length === 0) return;
-  const frontmatter = packageNames
-    .map((name) => `"${name}": patch`)
-    .join("\n");
-  const body = "Synthetic canary snapshot (no pending changesets).";
-  const file = ".changeset/canary-snapshot-auto.md";
-  writeFileSync(file, `---\n${frontmatter}\n---\n${body}\n`);
-  console.log(
-    `Created synthetic canary changeset for: ${packageNames.join(", ")}.`,
-  );
-}
-
 const selectedPackages = selectedPackagesFromInput(process.env.RELEASE_PACKAGES);
 if (selectedPackages.length === 0) {
   console.error("No publishable packages match RELEASE_PACKAGES.");
@@ -122,14 +95,11 @@ if (changedPackages.length === 0) {
   process.exit(0);
 }
 
-const pendingBefore = packagesInPendingChangesets();
-if (pendingBefore.length > 0 && changedPackages.length < selectedPackages.length) {
-  filterChangesetsByPackage(changedPackages.join(" "));
-}
-
-if (!hasPendingChangesets()) {
-  writeSyntheticCanaryChangeset(changedPackages);
-}
+// Reduce the pending changeset set to EXACTLY the changed, selected packages,
+// synthesizing entries for any that lack a changeset. This prevents unrelated
+// pending changesets from being canary-published and guarantees every changed
+// selected package is included.
+selectCanaryChangesets(changedPackages);
 
 process.env.CHANGESET_SNAPSHOT = "1";
 run("pnpm exec changeset version --snapshot canary");
