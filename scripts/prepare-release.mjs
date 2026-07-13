@@ -209,11 +209,18 @@ if (!ghToken) {
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
 process.env.GITHUB_TOKEN ??= ghToken;
 
-try {
-  filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
-} catch (err) {
-  console.error(err.message);
-  process.exit(1);
+// Only filter when changesets actually exist. When none remain — because a
+// prior prepare run already consumed them, or an admin bumped a package.json
+// version by hand — skip filtering and fall through to the
+// masterAheadOfProduction() branch instead of throwing "No pending changesets
+// found." (filterChangesetsByPackage throws on an empty set).
+if (hasPendingChangesets()) {
+  try {
+    filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
 }
 
 let released;
