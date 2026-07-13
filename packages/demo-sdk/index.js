@@ -76,7 +76,7 @@ export function greetDisplayName(name = "") {
 }
 
 /** Prefix a greeting with custom label text for UI banners. */
-export function greetWithPrefix(prefix = "Welcome", name = "world", options = {}) {
+export function greetWithPrefix(prefix = "Welcome ...", name = "world", options = {}) {
   const cleanPrefix = String(prefix ?? "").trim() || "Welcome";
   return `${cleanPrefix}: ${greet(name, options)}`;
 }
