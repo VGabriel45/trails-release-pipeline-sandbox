@@ -84,7 +84,6 @@ export function assertPublishRegistryPinnedToNpm(pkgs = getPublishablePackageEnt
     );
   }
 }
-
 /** Walk packages/* and return publishable package metadata (respects private + ignore). */
 export function getPublishablePackageEntries() {
   const ignored = getIgnoredPackages();
