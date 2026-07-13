@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/demo-sdk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": false,
   "description": "Minimal publishable package for release pipeline sandbox testing",
   "main": "index.js",

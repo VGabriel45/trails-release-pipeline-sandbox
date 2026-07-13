@@ -1,5 +1,11 @@
 # @vgabriel45/demo-sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- [#37](https://github.com/VGabriel45/trails-release-pipeline-sandbox/pull/37) [`04ab75f`](https://github.com/VGabriel45/trails-release-pipeline-sandbox/commit/04ab75fc5fa8cf6d75d241f121947103752af24a) Thanks [@VGabriel45](https://github.com/VGabriel45)! - Add `greetDisplayName(name)` helper to format and greet user display names in one call.
+
 ## 2.0.0
 
 ### Major Changes
