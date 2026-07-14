@@ -106,6 +106,23 @@ function remoteTagCommit(tag) {
   }
 }
 
+// Packages relevant to THIS production commit:
+// - brand-new release versions (tag missing locally and remotely), or
+// - versions already tagged at this HEAD (idempotent retry path).
+//
+// Historical versions from prior releases are excluded even if they still exist
+// in the monorepo, so tag integrity checks don't compare them against the
+// current commit.
+function packagesForCurrentReleaseCommit(pkgs, expectedCommit) {
+  return pkgs.filter((pkg) => {
+    const tag = `${pkg.name}@${pkg.version}`;
+    const local = localTagCommit(tag);
+    const remote = remoteTagCommit(tag);
+    if (!local && !remote) return true;
+    return local === expectedCommit || remote === expectedCommit;
+  });
+}
+
 // Tag only the given packages (the set confirmed live on npm). Tagging a
 // version that never published would burn the tag: a later retry-production
 // run skips packages whose tag already exists, so the version could never be
@@ -246,6 +263,8 @@ ensureNpmAuth();
 
 const allPublishable = publishablePackages();
 assertPublishRegistryPinnedToNpm(allPublishable);
+const expectedCommit = headCommit();
+const releaseCandidates = packagesForCurrentReleaseCommit(allPublishable, expectedCommit);
 
 // Capture publish output for observability/debugging. Release truth comes from
 // npmjs registry verification below, not from stdout parsing.
@@ -267,9 +286,16 @@ process.stdout.write(publishOutput.endsWith("\n") ? publishOutput : `${publishOu
 
 // Derive the released set from the canonical npmjs registry only. This avoids
 // trusting tool stdout for publish success and avoids registry redirection.
+if (releaseCandidates.length === 0) {
+  console.log(
+    "No current-release package versions detected on this commit (all tags belong to earlier releases). Nothing to reconcile.",
+  );
+  process.exit(0);
+}
+
 const published = [];
 const unpublished = [];
-for (const pkg of allPublishable) {
+for (const pkg of releaseCandidates) {
   if (isPublishedOnNpm(pkg)) {
     published.push(pkg);
   } else {
@@ -277,7 +303,6 @@ for (const pkg of allPublishable) {
   }
 }
 
-const expectedCommit = headCommit();
 const tags = ensurePackageTags(published, expectedCommit);
 pushMissingTags(tags, expectedCommit);
 
