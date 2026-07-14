@@ -36,7 +36,8 @@ Then merge into the target `package.json`:
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0"
+    "@changesets/cli": "^2.31.0",
+    "js-yaml": "^5.2.1"
   }
 }
 ```
@@ -79,7 +80,8 @@ on `master` after `changeset version`. Selective mode is strict: if Changesets
 would widen to extra packages (dependency/fixed-group propagation), the run
 fails and prints the expanded package list so admins can re-run with an explicit
 set (or all modified packages). Add new npm names to the `packages` choice list
-in `release-prepare.yml` and `release-publish.yml` when the monorepo grows.
+in `release-prepare.yml`, `release-publish.yml`, and `release-canary.yml` when
+the monorepo grows.
 
 For canary: if there are no pending changesets, the runner creates a temporary
 synthetic snapshot changeset so canary can still publish for changed packages.
