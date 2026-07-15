@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/mock-core",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "private": false,
   "description": "Mock main SDK mirroring 0xtrails, depends on mock-api + mock-wallet for release pipeline testing",
   "main": "index.js",

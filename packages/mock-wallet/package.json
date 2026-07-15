@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/mock-wallet",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": false,
   "description": "Mock wallet package mirroring @0xtrails/wallet for release pipeline testing",
   "main": "index.js",
