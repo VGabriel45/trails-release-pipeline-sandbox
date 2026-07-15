@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/mock-svm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Mock SVM plugin mirroring @0xtrails/svm, peer-depends on mock-core for release pipeline testing",
   "main": "index.js",

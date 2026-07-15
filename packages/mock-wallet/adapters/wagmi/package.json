@@ -1,6 +1,6 @@
 {
   "name": "@vgabriel45/mock-adapter-wagmi",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "private": false,
   "description": "Mock wagmi adapter mirroring @0xtrails/adapter-wagmi for release pipeline testing",
   "main": "index.js",
