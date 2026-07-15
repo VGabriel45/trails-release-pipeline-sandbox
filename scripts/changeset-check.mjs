@@ -1,47 +1,58 @@
-import { execSync } from "node:child_process";
-import { packagesFromChangedFiles } from "./lib/packages.mjs";
-import { manualChangesetFiles } from "./lib/manual-changesets.mjs";
+import { execSync } from "node:child_process"
+import { packagesFromChangedFiles } from "./lib/packages.mjs"
+import { manualChangesetFiles } from "./lib/manual-changesets.mjs"
 
-const PR_NUMBER = process.env.PR_NUMBER;
 const PR_LABELS = (process.env.PR_LABELS ?? "")
   .split(",")
   .map((l) => l.trim())
-  .filter(Boolean);
+  .filter(Boolean)
 
 function isSkipChangeset() {
   if (PR_LABELS.some((l) => l.toLowerCase() === "skip-changeset")) {
-    return true;
+    return true
   }
-  const title = process.env.PR_TITLE ?? "";
-  const body = process.env.PR_BODY ?? "";
-  return /\[skip-changeset\]/i.test(`${title}\n${body}`);
+  const title = process.env.PR_TITLE ?? ""
+  const body = process.env.PR_BODY ?? ""
+  return /\[skip-changeset\]/i.test(`${title}\n${body}`)
 }
 
-const changedFiles = execSync("git diff --name-only origin/master...HEAD", {
+// --name-status so deletions can be told apart: a deleted file still counts as
+// a package change (it needs a changeset), but deleting a .changeset/*.md file
+// must not satisfy the manual-changeset requirement.
+const diffLines = execSync("git diff --name-status origin/master...HEAD", {
   encoding: "utf8",
 })
   .split("\n")
-  .filter(Boolean);
+  .filter(Boolean)
 
-const affected = packagesFromChangedFiles(changedFiles);
+const changedFiles = []
+const liveChangedFiles = []
+for (const line of diffLines) {
+  const [status, ...paths] = line.split("\t")
+  changedFiles.push(...paths)
+  // Renames/copies list the destination last; deletions have no live path.
+  if (!status.startsWith("D")) liveChangedFiles.push(paths[paths.length - 1])
+}
+
+const affected = packagesFromChangedFiles(changedFiles)
 if (affected.length === 0) {
-  console.log("No publishable packages changed — pass.");
-  process.exit(0);
+  console.log("No publishable packages changed — pass.")
+  process.exit(0)
 }
 
 if (isSkipChangeset()) {
-  console.log("skip-changeset (token or label) — pass.");
-  process.exit(0);
+  console.log("skip-changeset (token or label) — pass.")
+  process.exit(0)
 }
 
-const manual = manualChangesetFiles(changedFiles, PR_NUMBER);
+const manual = manualChangesetFiles(liveChangedFiles)
 if (manual.length > 0) {
-  console.log(`PASS: manual changeset present (${manual.join(", ")}).`);
-  process.exit(0);
+  console.log(`PASS: manual changeset present (${manual.join(", ")}).`)
+  process.exit(0)
 }
 
 console.error(
   "FAIL: publishable package changes require a manual .changeset/*.md file,\n" +
     "or a 'skip-changeset' label ([skip-changeset] token also supported) for internal-only changes.",
-);
-process.exit(1);
+)
+process.exit(1)

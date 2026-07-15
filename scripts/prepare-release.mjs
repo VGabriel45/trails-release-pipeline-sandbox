@@ -1,12 +1,12 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process"
 import {
   existsSync,
   readFileSync,
   readdirSync,
   unlinkSync,
   writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
+} from "node:fs"
+import { join } from "node:path"
 import {
   filterChangesetsByPackage,
   parsePackageSelection,
@@ -14,64 +14,67 @@ import {
   packagesInPendingChangesets,
   restoreHeldChangesets,
   serializeChangeset,
-} from "./lib/filter-changesets.mjs";
+} from "./lib/filter-changesets.mjs"
 import {
   assertIgnoredPackagesArePrivate,
   getPublishablePackageEntries,
-} from "./lib/packages.mjs";
+} from "./lib/packages.mjs"
 
 function run(cmd, env = process.env) {
-  execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
+  execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } })
 }
 
 function execOut(cmd, env = process.env) {
   return execSync(cmd, {
     encoding: "utf8",
     env: { ...process.env, ...env },
-  }).trim();
+  }).trim()
 }
 
 // Shell-free variants for commands that carry repo-controlled data (package
 // names/versions, PR titles/bodies). Argv arrays never pass through a shell,
 // so metacharacters in the data are inert.
 function runFile(cmd, args, env = process.env) {
-  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } });
+  execFileSync(cmd, args, { stdio: "inherit", env: { ...process.env, ...env } })
 }
 
 function execFileOut(cmd, args, env = process.env) {
   return execFileSync(cmd, args, {
     encoding: "utf8",
     env: { ...process.env, ...env },
-  }).trim();
+  }).trim()
 }
 
 function runChangesetVersionWithRetry(maxAttempts = 3) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      run("pnpm exec changeset version");
-      return;
+      run("pnpm exec changeset version")
+      return
     } catch (err) {
-      if (attempt === maxAttempts) throw err;
-      const waitSec = attempt * 5;
+      if (attempt === maxAttempts) throw err
+      const waitSec = attempt * 5
       console.warn(
         `changeset version failed (attempt ${attempt}/${maxAttempts}), retrying in ${waitSec}s…`,
-      );
-      run(`sleep ${waitSec}`);
+      )
+      run(`sleep ${waitSec}`)
     }
   }
 }
 
 function shortName(name) {
-  return name.includes("/") ? name.split("/").pop() : name;
+  return name.includes("/") ? name.split("/").pop() : name
 }
 
 // Version of a package on origin/production (null if it isn't there yet).
 function productionVersion(pkgDir) {
   try {
-    const raw = execFileOut("git", ["show", `origin/production:${pkgDir}/package.json`]);
-    return JSON.parse(raw).version;
+    const raw = execFileOut("git", [
+      "show",
+      `origin/production:${pkgDir}/package.json`,
+    ])
+    return JSON.parse(raw).version
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -81,34 +84,34 @@ function productionVersion(pkgDir) {
 function releasedPackages() {
   return publishablePackages()
     .filter((p) => productionVersion(p.dir) !== p.version)
-    .map((p) => ({ name: p.name, version: p.version }));
+    .map((p) => ({ name: p.name, version: p.version }))
 }
 
 function releaseTitle(released) {
-  if (released.length === 1) return `Release v${released[0].version}`;
-  return `Release: ${released.map((p) => `${shortName(p.name)}@${p.version}`).join(", ")}`;
+  if (released.length === 1) return `Release v${released[0].version}`
+  return `Release: ${released.map((p) => `${shortName(p.name)}@${p.version}`).join(", ")}`
 }
 
 function releaseBody(released) {
-  const lines = released.map((p) => `- ${p.name}@${p.version}`).join("\n");
-  return `Automated release PR from the release-prepare workflow.\n\n${lines}`;
+  const lines = released.map((p) => `- ${p.name}@${p.version}`).join("\n")
+  return `Automated release PR from the release-prepare workflow.\n\n${lines}`
 }
 
 function commitMessage(released) {
-  if (released.length === 1) return `chore(release): v${released[0].version}`;
+  if (released.length === 1) return `chore(release): v${released[0].version}`
   return `chore(release): ${released
     .map((p) => `${shortName(p.name)}@${p.version}`)
-    .join(", ")}`;
+    .join(", ")}`
 }
 
 function publishablePackages() {
-  return getPublishablePackageEntries();
+  return getPublishablePackageEntries()
 }
 
 // Map of package name -> current master version, captured before this run's
 // `changeset version` so we can tell what THIS run actually bumped.
 function currentVersions() {
-  return new Map(publishablePackages().map((p) => [p.name, p.version]));
+  return new Map(publishablePackages().map((p) => [p.name, p.version]))
 }
 
 // Packages whose version changed during this run (compared to the snapshot
@@ -118,22 +121,24 @@ function currentVersions() {
 function bumpedThisRun(versionsBefore) {
   return publishablePackages()
     .filter((p) => versionsBefore.get(p.name) !== p.version)
-    .map((p) => ({ name: p.name, version: p.version }));
+    .map((p) => ({ name: p.name, version: p.version }))
 }
 
 // Guard against changesets silently widening a selective release (dependency or
 // fixed/linked-group expansion). Checks ONLY what this run bumped against the
 // admin's explicit selection; "all" selections are unconstrained by design.
 function enforceSelectionBoundary(bumped, selectionRaw) {
-  const selected = parsePackageSelection(selectionRaw ?? "all");
-  if (!selected) return;
-  const unexpected = bumped.filter((pkg) => !selected.has(pkg.name));
-  if (unexpected.length === 0) return;
+  const selected = parsePackageSelection(selectionRaw ?? "all")
+  if (!selected) return
+  const unexpected = bumped.filter((pkg) => !selected.has(pkg.name))
+  if (unexpected.length === 0) return
   throw new Error(
     `Selective release exceeded requested packages. Requested: ${[...selected].join(", ")}. Expanded to include: ${unexpected
       .map((pkg) => `${pkg.name}@${pkg.version}`)
-      .join(", ")}. Re-run with All modified packages or include the expanded packages explicitly.`,
-  );
+      .join(
+        ", ",
+      )}. Re-run with All modified packages or include the expanded packages explicitly.`,
+  )
 }
 
 // While a package is pre-1.0 (version 0.x) we don't follow strict semver yet:
@@ -148,47 +153,42 @@ function capPre1MajorBumps() {
       p.name,
       Number(String(p.version).split(".")[0]),
     ]),
-  );
+  )
 
-  let capped = false;
+  let capped = false
   for (const file of readdirSync(".changeset")) {
-    if (!file.endsWith(".md")) continue;
-    const path = join(".changeset", file);
-    const raw = readFileSync(path, "utf8");
-    const parsed = parseChangesetFile(raw);
-    if (!parsed) continue;
+    if (!file.endsWith(".md")) continue
+    const path = join(".changeset", file)
+    const raw = readFileSync(path, "utf8")
+    const parsed = parseChangesetFile(raw)
+    if (!parsed) continue
     const updatedPackages = parsed.packages.map((pkg) => {
       if (pkg.bump === "major" && majorByName.get(pkg.name) === 0) {
-        capped = true;
-        return { ...pkg, bump: "minor" };
+        capped = true
+        return { ...pkg, bump: "minor" }
       }
-      return pkg;
-    });
-    const updated = serializeChangeset(updatedPackages, parsed.body);
-    if (updated !== raw) writeFileSync(path, updated);
+      return pkg
+    })
+    const updated = serializeChangeset(updatedPackages, parsed.body)
+    if (updated !== raw) writeFileSync(path, updated)
   }
 
   if (capped) {
     console.log(
       "Pre-1.0: capped 'major' bumps to 'minor' (no automatic 1.0.0).",
-    );
+    )
   }
 }
 
 function hasPendingChangesets() {
-  return packagesInPendingChangesets().length > 0;
-}
-
-function masterAheadOfProduction() {
-  const count = execOut("git rev-list --count origin/production..origin/master");
-  return Number(count) > 0;
+  return packagesInPendingChangesets().length > 0
 }
 
 function findOpenReleasePr(ghToken) {
   return execOut(
     'gh pr list --base production --head master --state open --json url --jq ".[0].url // empty"',
     { ...process.env, GH_TOKEN: ghToken },
-  );
+  )
 }
 
 // --- In-flight release aggregation -----------------------------------------
@@ -205,19 +205,56 @@ function findOpenReleasePr(ghToken) {
 // If a new changeset demands a higher bump (major on top of a minor release),
 // the version is re-evaluated upward — exactly semver over the full set.
 
-// Restore every consumed changeset from the release commits that sit between
-// production and master. Each prepare run makes exactly one
-// "chore(release): …" commit; the parent of that commit holds the changeset
-// files as they were before `changeset version` consumed them.
-function restoreConsumedChangesets() {
+// The "chore(release): …" commits that belong to the CURRENT release cycle.
+//
+// Under squash merges, released commits never become ancestors of production,
+// so `origin/production..HEAD` accumulates every historical release commit and
+// ancestry alone cannot bound the scan. Content can: production is a squash of
+// master, so the previous cycle ends at the newest release commit whose
+// publishable package versions all equal origin/production. Only commits newer
+// than that belong to the in-flight release being rebuilt.
+function currentCycleReleaseCommits() {
+  const prodVersions = new Map(
+    publishablePackages().map((p) => [p.dir, productionVersion(p.dir)]),
+  )
+
+  const versionsMatchProduction = (sha) => {
+    for (const [dir, prodVersion] of prodVersions) {
+      let version = null
+      try {
+        const raw = execFileOut("git", ["show", `${sha}:${dir}/package.json`])
+        version = JSON.parse(raw).version
+      } catch {
+        // package.json absent (or unparsable) at this commit — compare as null.
+      }
+      if (version !== prodVersion) return false
+    }
+    return true
+  }
+
   const releaseCommits = execOut(
     "git log --format=%H --grep='^chore(release):' origin/production..HEAD",
   )
     .split("\n")
-    .filter(Boolean)
-    .reverse(); // oldest first: its parent has the fullest pre-consumption content
+    .filter(Boolean) // newest first
 
-  const restored = new Set();
+  const current = []
+  for (const sha of releaseCommits) {
+    if (versionsMatchProduction(sha)) break // previous cycle's final state
+    current.push(sha)
+  }
+  return current.reverse() // oldest first
+}
+
+// Restore every consumed changeset from the current cycle's release commits.
+// Each prepare run makes exactly one "chore(release): …" commit; the parent of
+// that commit holds the changeset files as they were before `changeset version`
+// consumed them. Oldest first: its parent has the fullest pre-consumption
+// content.
+function restoreConsumedChangesets() {
+  const releaseCommits = currentCycleReleaseCommits()
+
+  const restored = new Set()
   for (const sha of releaseCommits) {
     const changed = execFileOut("git", [
       "show",
@@ -226,29 +263,31 @@ function restoreConsumedChangesets() {
       sha,
       "--",
       ".changeset",
-    ]);
+    ])
     for (const line of changed.split("\n")) {
-      const match = line.match(/^([DM])\t(.+\.md)$/);
-      if (!match) continue;
-      const [, status, path] = match;
-      if (path.endsWith("README.md") || restored.has(path)) continue;
+      const match = line.match(/^([DM])\t(.+\.md)$/)
+      if (!match) continue
+      const [, status, path] = match
+      if (path.endsWith("README.md") || restored.has(path)) continue
       if (status === "D" && existsSync(path)) {
         // A new changeset reused this filename after the old one was consumed.
         // Keep the new file; the consumed content is unrecoverable by name.
-        console.warn(`Skipping restore of ${path}: a newer file exists with that name.`);
-        continue;
+        console.warn(
+          `Skipping restore of ${path}: a newer file exists with that name.`,
+        )
+        continue
       }
       const content = execFileSync("git", ["show", `${sha}^:${path}`], {
         encoding: "utf8",
-      });
-      writeFileSync(path, content);
-      restored.add(path);
+      })
+      writeFileSync(path, content)
+      restored.add(path)
     }
   }
   if (restored.size > 0) {
     console.log(
       `Restored ${restored.size} changeset(s) consumed by in-flight release commits: ${[...restored].join(", ")}`,
-    );
+    )
   }
 }
 
@@ -257,40 +296,40 @@ function restoreConsumedChangesets() {
 function rebuildInFlightReleaseBaseline() {
   console.log(
     "Release PR is open and new changesets landed — rebuilding the release from the production baseline so the same release absorbs them.",
-  );
+  )
 
   for (const pkg of publishablePackages()) {
-    const prodVersion = productionVersion(pkg.dir);
+    const prodVersion = productionVersion(pkg.dir)
     if (prodVersion && prodVersion !== pkg.version) {
-      const manifestPath = join(pkg.dir, "package.json");
-      const raw = readFileSync(manifestPath, "utf8");
+      const manifestPath = join(pkg.dir, "package.json")
+      const raw = readFileSync(manifestPath, "utf8")
       writeFileSync(
         manifestPath,
         raw.replace(/("version"\s*:\s*")[^"]+(")/, `$1${prodVersion}$2`),
-      );
+      )
     }
 
-    const changelogPath = join(pkg.dir, "CHANGELOG.md");
+    const changelogPath = join(pkg.dir, "CHANGELOG.md")
     try {
       const prodChangelog = execFileSync(
         "git",
         ["show", `origin/production:${changelogPath}`],
         { encoding: "utf8" },
-      );
-      writeFileSync(changelogPath, prodChangelog);
+      )
+      writeFileSync(changelogPath, prodChangelog)
     } catch {
       // Changelog doesn't exist on production — it was created by the
       // in-flight release. Drop it; changeset version will recreate it.
-      if (existsSync(changelogPath)) unlinkSync(changelogPath);
+      if (existsSync(changelogPath)) unlinkSync(changelogPath)
     }
   }
 
-  restoreConsumedChangesets();
+  restoreConsumedChangesets()
 
   if (!hasPendingChangesets()) {
     throw new Error(
       "Rebuild found no changesets to re-version after restoring the production baseline. The in-flight release commits did not consume any recoverable changesets — resolve manually (close the release PR or reset master).",
-    );
+    )
   }
 }
 
@@ -298,66 +337,81 @@ function rebuildInFlightReleaseBaseline() {
 // from the app slug (APP_SLUG, set by the workflow from create-github-app-token)
 // and falls back to github-actions[bot] when not running as an app.
 function configureGitBot() {
-  const slug = (process.env.APP_SLUG ?? "").trim();
+  const slug = (process.env.APP_SLUG ?? "").trim()
   if (slug) {
-    let userId = "";
+    let userId = ""
     try {
-      userId = execFileOut("gh", ["api", `/users/${slug}[bot]`, "--jq", ".id"]);
+      userId = execFileOut("gh", ["api", `/users/${slug}[bot]`, "--jq", ".id"])
     } catch {
       // fall through to github-actions[bot]
     }
     if (userId) {
-      runFile("git", ["config", "user.name", `${slug}[bot]`]);
+      runFile("git", ["config", "user.name", `${slug}[bot]`])
       runFile("git", [
         "config",
         "user.email",
         `${userId}+${slug}[bot]@users.noreply.github.com`,
-      ]);
-      return;
+      ])
+      return
     }
   }
-  runFile("git", ["config", "user.name", "github-actions[bot]"]);
+  runFile("git", ["config", "user.name", "github-actions[bot]"])
   runFile("git", [
     "config",
     "user.email",
     "41898282+github-actions[bot]@users.noreply.github.com",
-  ]);
+  ])
 }
 
 function openReleasePr(title, body, ghToken) {
-  const env = { ...process.env, GH_TOKEN: ghToken };
+  const env = { ...process.env, GH_TOKEN: ghToken }
 
-  const existing = findOpenReleasePr(ghToken);
+  const existing = findOpenReleasePr(ghToken)
 
   if (existing) {
-    runFile("gh", ["pr", "edit", existing, "--title", title, "--body", body], env);
-    console.log(`Release PR already open: ${existing}`);
-    return existing;
+    runFile(
+      "gh",
+      ["pr", "edit", existing, "--title", title, "--body", body],
+      env,
+    )
+    console.log(`Release PR already open: ${existing}`)
+    return existing
   }
 
   const prUrl = execFileOut(
     "gh",
-    ["pr", "create", "--base", "production", "--head", "master", "--title", title, "--body", body],
+    [
+      "pr",
+      "create",
+      "--base",
+      "production",
+      "--head",
+      "master",
+      "--title",
+      title,
+      "--body",
+      body,
+    ],
     env,
-  );
+  )
 
-  console.log(`Release PR: ${prUrl}`);
-  return prUrl;
+  console.log(`Release PR: ${prUrl}`)
+  return prUrl
 }
 
-run("git fetch origin master production");
-run("git checkout master");
-run("git pull origin master");
+run("git fetch origin master production")
+run("git checkout master")
+run("git pull origin master")
 
-const ghToken = process.env.GH_TOKEN ?? process.env.RELEASE_PUSH_TOKEN;
+const ghToken = process.env.GH_TOKEN ?? process.env.RELEASE_PUSH_TOKEN
 if (!ghToken) {
-  throw new Error("GH_TOKEN (app token) is required to open the release PR");
+  throw new Error("GH_TOKEN (app token) is required to open the release PR")
 }
 
 // @changesets/changelog-github resolves PR links/authors via the GitHub API.
-process.env.GITHUB_TOKEN ??= ghToken;
+process.env.GITHUB_TOKEN ??= ghToken
 
-assertIgnoredPackagesArePrivate();
+assertIgnoredPackagesArePrivate()
 
 // In-flight release aggregation: when new changesets are pending, master
 // already carries staged bumps from an earlier prepare run, AND that release
@@ -371,86 +425,88 @@ if (
   releasedPackages().length > 0 &&
   findOpenReleasePr(ghToken)
 ) {
-  rebuildInFlightReleaseBaseline();
+  rebuildInFlightReleaseBaseline()
 }
 
-let selectionAlreadyConsumed = false;
+let selectionAlreadyConsumed = false
 
 // Only filter when changesets actually exist. When none remain — because a
 // prior prepare run already consumed them, or an admin bumped a package.json
 // version by hand — skip filtering and fall through to the
-// masterAheadOfProduction() branch instead of throwing "No pending changesets
+// staged-release branch instead of throwing "No pending changesets
 // found." (filterChangesetsByPackage throws on an empty set).
 if (hasPendingChangesets()) {
   try {
-    filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all");
+    filterChangesetsByPackage(process.env.RELEASE_PACKAGES ?? "all")
   } catch (err) {
     if (
-      err?.message?.startsWith(
-        "No pending changesets left after filtering to:",
-      )
+      err?.message?.startsWith("No pending changesets left after filtering to:")
     ) {
-      selectionAlreadyConsumed = true;
+      selectionAlreadyConsumed = true
       console.warn(
         `${err.message}. Continuing: selected changesets are already consumed; will attempt release PR recovery from master vs production divergence.`,
-      );
+      )
     } else {
-      console.error(err.message);
-      process.exit(1);
+      console.error(err.message)
+      process.exit(1)
     }
   }
 }
 
-let released;
+let released
 
 if (hasPendingChangesets() && !selectionAlreadyConsumed) {
-  const versionsBefore = currentVersions();
-  capPre1MajorBumps();
+  const versionsBefore = currentVersions()
+  capPre1MajorBumps()
 
-  console.log("Pending changesets found — running changeset version…");
+  console.log("Pending changesets found — running changeset version…")
   try {
-    runChangesetVersionWithRetry();
+    runChangesetVersionWithRetry()
   } finally {
-    restoreHeldChangesets();
+    restoreHeldChangesets()
   }
 
   // Boundary check uses THIS run's actual version delta, not master-vs-production
   // (which would count still-unmerged bumps from earlier prepare runs).
-  enforceSelectionBoundary(bumpedThisRun(versionsBefore), process.env.RELEASE_PACKAGES);
+  enforceSelectionBoundary(
+    bumpedThisRun(versionsBefore),
+    process.env.RELEASE_PACKAGES,
+  )
 
-  released = releasedPackages();
+  released = releasedPackages()
   if (released.length === 0) {
-    throw new Error("changeset version ran but no package versions changed.");
+    throw new Error("changeset version ran but no package versions changed.")
   }
   console.log(
     `Releasing: ${released.map((p) => `${p.name}@${p.version}`).join(", ")}`,
-  );
+  )
 
-  configureGitBot();
-  run("git add -A");
-  runFile("git", ["commit", "-m", commitMessage(released)]);
-  run("git push origin master");
-} else if (masterAheadOfProduction()) {
-  // No versioning happened this run (changesets already consumed), so there is
-  // no per-run delta to bound — the divergence is whatever earlier runs staged.
-  released = releasedPackages();
-  if (released.length === 0) {
-    console.error(
-      "Master is ahead of production but no publishable package versions differ.",
-    );
-    process.exit(1);
-  }
-  console.log(
-    `No pending changesets (already consumed). Master is ahead of production — opening release PR only for: ${released
-      .map((p) => `${p.name}@${p.version}`)
-      .join(", ")}`,
-  );
+  configureGitBot()
+  run("git add -A")
+  runFile("git", ["commit", "-m", commitMessage(released)])
+  run("git push origin master")
 } else {
-  console.error(
-    "Nothing to release: no pending changesets on master and master matches production.",
-  );
-  console.error("Merge feature PRs with changesets first, then run prepare again.");
-  process.exit(1);
+  const staged = releasedPackages()
+  if (staged.length > 0) {
+    // No versioning happened this run (changesets already consumed), so there is
+    // no per-run delta to bound — use package-version drift as the source of
+    // truth. This keeps prepare compatible with both squash and merge commit
+    // strategies on the master -> production release PR.
+    released = staged
+    console.log(
+      `No pending changesets (already consumed). Staged version differences found between master and production — opening release PR only for: ${released
+        .map((p) => `${p.name}@${p.version}`)
+        .join(", ")}`,
+    )
+  } else {
+    console.error(
+      "Nothing to release: no pending changesets on master and no publishable package versions differ from production.",
+    )
+    console.error(
+      "Merge feature PRs with changesets first, then run prepare again.",
+    )
+    process.exit(1)
+  }
 }
 
-openReleasePr(releaseTitle(released), releaseBody(released), ghToken);
+openReleasePr(releaseTitle(released), releaseBody(released), ghToken)

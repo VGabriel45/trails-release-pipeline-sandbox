@@ -1,0 +1,22 @@
+{
+  "name": "@vgabriel45/mock-core",
+  "version": "0.16.0",
+  "private": false,
+  "description": "Mock main SDK mirroring 0xtrails, depends on mock-api + mock-wallet for release pipeline testing",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VGabriel45/trails-release-pipeline-sandbox",
+    "directory": "packages/mock-core"
+  },
+  "dependencies": {
+    "@vgabriel45/mock-api": "workspace:*",
+    "@vgabriel45/mock-wallet": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

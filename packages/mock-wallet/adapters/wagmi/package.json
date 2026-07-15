@@ -1,0 +1,21 @@
+{
+  "name": "@vgabriel45/mock-adapter-wagmi",
+  "version": "0.16.0",
+  "private": false,
+  "description": "Mock wagmi adapter mirroring @0xtrails/adapter-wagmi for release pipeline testing",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VGabriel45/trails-release-pipeline-sandbox",
+    "directory": "packages/mock-wallet/adapters/wagmi"
+  },
+  "dependencies": {
+    "@vgabriel45/mock-wallet": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
