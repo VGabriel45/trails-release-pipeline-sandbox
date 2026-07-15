@@ -84,7 +84,8 @@ The supplied workflows assume:
 - the root build command is `pnpm build`.
 
 See [SETUP.md](./SETUP.md) for changing branch names, adding package choices to
-release workflow inputs, and copying the required files into another repository.
+`release-prepare.yml`, `release-publish.yml`, and `release-canary.yml`, and
+copying the required files into another repository.
 
 ## Developer requirements
 
@@ -114,6 +115,9 @@ changeset nor a skip marker is present, **Changeset Check** fails.
    - Selective mode is strict: if Changesets would expand to additional
      packages (dependency/fixed-group propagation), prepare fails and lists the
      extra packages to include.
+   - If no pending changesets remain (already consumed by an earlier prepare
+     run) and `master` is already ahead of `production`, prepare opens/updates
+     the release PR from that staged divergence.
 4. Review the resulting `master → production` release PR. It contains the
    package version updates, changelog entries, and consumed changesets.
 5. Merge it using **Create a merge commit**.

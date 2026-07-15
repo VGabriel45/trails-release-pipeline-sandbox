@@ -1,0 +1,18 @@
+{
+  "name": "@vgabriel45/mock-api",
+  "version": "0.16.0",
+  "private": false,
+  "description": "Mock API client package mirroring @0xtrails/api for release pipeline testing",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VGabriel45/trails-release-pipeline-sandbox",
+    "directory": "packages/mock-api"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

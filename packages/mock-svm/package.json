@@ -1,0 +1,21 @@
+{
+  "name": "@vgabriel45/mock-svm",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Mock SVM plugin mirroring @0xtrails/svm, peer-depends on mock-core for release pipeline testing",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VGabriel45/trails-release-pipeline-sandbox",
+    "directory": "packages/mock-svm"
+  },
+  "peerDependencies": {
+    "@vgabriel45/mock-core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
